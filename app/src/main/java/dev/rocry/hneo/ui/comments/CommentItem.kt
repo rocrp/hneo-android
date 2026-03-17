@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.comments
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -16,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.FlatComment
+import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.depthColor
 
 @Composable
@@ -31,7 +31,7 @@ fun CommentItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .einkClickable(onClick)
             .padding(start = indent, end = 16.dp, top = 8.dp, bottom = 8.dp),
     ) {
         if (comment.depth > 0) {

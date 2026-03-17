@@ -1,6 +1,8 @@
 package dev.rocry.hneo.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -10,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
 
@@ -72,7 +75,7 @@ fun <T> PaginatedColumn(
             }
         }
 
-        // Page controls
+        // Page controls — no ripple (this component is e-ink only)
         if (totalPages > 1) {
             HorizontalDivider()
             Row(
@@ -82,7 +85,7 @@ fun <T> PaginatedColumn(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
+                NoRippleIconButton(
                     onClick = { if (currentPage > 0) currentPage-- },
                     enabled = currentPage > 0,
                 ) {
@@ -94,7 +97,7 @@ fun <T> PaginatedColumn(
                     style = MaterialTheme.typography.bodyMedium,
                 )
 
-                IconButton(
+                NoRippleIconButton(
                     onClick = { if (currentPage < totalPages - 1) currentPage++ },
                     enabled = currentPage < totalPages - 1,
                 ) {
@@ -102,5 +105,27 @@ fun <T> PaginatedColumn(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NoRippleIconButton(
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }

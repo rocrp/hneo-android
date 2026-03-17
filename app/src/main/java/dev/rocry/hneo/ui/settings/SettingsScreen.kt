@@ -6,7 +6,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.rocry.hneo.data.*
+import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.FontInfo
 import dev.rocry.hneo.ui.theme.FontManager
 import kotlinx.coroutines.flow.first
@@ -147,7 +147,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                     )
                                 },
                             )
-                            .clickable {
+                            .einkClickable {
                                 settings = settings.copy(fontChoice = font.name)
                                 save(SettingsKeys.FONT_CHOICE, font.name)
                             }

@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.stories
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -17,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.rocry.hneo.data.OpenGraphService
 import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 import dev.rocry.hneo.ui.theme.storyAccentColor
 import kotlinx.coroutines.launch
@@ -47,7 +47,7 @@ fun StoryCard(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .einkClickable(onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
