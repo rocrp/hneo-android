@@ -5,7 +5,8 @@ export ANDROID_HOME ?= $(HOME)/w/Android/sdk
 
 build:
 	./gradlew assembleRelease
-	@echo "APK: app/build/outputs/apk/release/app-release-unsigned.apk"
+	@cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/hneo.apk
+	@echo "APK: app/build/outputs/apk/release/hneo.apk"
 
 debug:
 	./gradlew assembleDebug
