@@ -1,5 +1,6 @@
 package dev.rocry.hneo.ui.comments
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.rocry.hneo.data.OpenGraphService
@@ -18,7 +20,11 @@ import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 
 @Composable
-fun StoryHeader(story: Story, modifier: Modifier = Modifier) {
+fun StoryHeader(
+    story: Story,
+    modifier: Modifier = Modifier,
+    onTitleClick: (() -> Unit)? = null,
+) {
     val einkMode = LocalEinkMode.current
     var thumbnailUrl by remember(story.url) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -41,6 +47,12 @@ fun StoryHeader(story: Story, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (onTitleClick != null) TextDecoration.Underline else TextDecoration.None,
+                    modifier = if (onTitleClick != null) {
+                        Modifier.clickable(onClick = onTitleClick)
+                    } else {
+                        Modifier
+                    },
                 )
 
                 story.domain?.let { domain ->

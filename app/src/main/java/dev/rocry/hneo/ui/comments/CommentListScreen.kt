@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.comments
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,6 +26,7 @@ fun CommentListScreen(
     viewModel: CommentListViewModel,
     onBack: () -> Unit,
     onSummaryClick: () -> Unit,
+    onOpenUrl: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -46,9 +46,7 @@ fun CommentListScreen(
                         Icon(Icons.Default.AutoAwesome, contentDescription = "AI Summary")
                     }
                     story.url?.let { url ->
-                        IconButton(onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        }) {
+                        IconButton(onClick = { onOpenUrl(url) }) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in Browser")
                         }
                     }
@@ -91,7 +89,10 @@ fun CommentListScreen(
                     totalItemCount = state.comments.size + 1, // +1 for header
                 ) {
                     item(key = "header") {
-                        StoryHeader(story = story)
+                        StoryHeader(
+                            story = story,
+                            onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
+                        )
                     }
                     items(
                         items = state.comments,
@@ -118,7 +119,10 @@ fun CommentListScreen(
                 // Normal: scrollable list
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item(key = "header") {
-                        StoryHeader(story = story)
+                        StoryHeader(
+                            story = story,
+                            onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
+                        )
                     }
 
                     items(

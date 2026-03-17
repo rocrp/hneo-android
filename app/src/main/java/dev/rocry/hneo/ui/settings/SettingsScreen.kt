@@ -300,6 +300,18 @@ fun SettingsScreen(onBack: () -> Unit) {
                 maxLines = 6,
             )
 
+            OutlinedTextField(
+                value = settings.llmWebpageSummaryPrompt,
+                onValueChange = {
+                    settings = settings.copy(llmWebpageSummaryPrompt = it)
+                    save(SettingsKeys.LLM_WEBPAGE_SUMMARY_PROMPT, it)
+                },
+                label = { Text("Webpage Summary Prompt") },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                maxLines = 6,
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

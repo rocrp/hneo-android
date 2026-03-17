@@ -5,6 +5,18 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+fun gitCommitCount(): Int {
+    val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+        .directory(rootProject.projectDir)
+        .redirectErrorStream(true)
+        .start()
+    val count = process.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 1
+    process.waitFor()
+    return count
+}
+
+val buildNumber = gitCommitCount()
+
 android {
     namespace = "dev.rocry.hneo"
     compileSdk = 35
@@ -13,8 +25,8 @@ android {
         applicationId = "dev.rocry.hneo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = buildNumber
+        versionName = "0.1.$buildNumber"
     }
 
     signingConfigs {

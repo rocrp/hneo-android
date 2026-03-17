@@ -19,6 +19,7 @@ object SettingsKeys {
     val LLM_MAX_COMMENTS = intPreferencesKey("llm_max_comments")
     val LLM_SYSTEM_PROMPT = stringPreferencesKey("llm_system_prompt")
     val LLM_EXPLAIN_PROMPT = stringPreferencesKey("llm_explain_prompt")
+    val LLM_WEBPAGE_SUMMARY_PROMPT = stringPreferencesKey("llm_webpage_summary_prompt")
     val FONT_CHOICE = stringPreferencesKey("font_choice")
     val THEME_MODE = stringPreferencesKey("theme_mode")
 }
@@ -39,6 +40,7 @@ data class AppSettings(
     val llmMaxComments: Int = 200,
     val llmSystemPrompt: String = DEFAULT_SYSTEM_PROMPT,
     val llmExplainPrompt: String = DEFAULT_EXPLAIN_PROMPT,
+    val llmWebpageSummaryPrompt: String = DEFAULT_WEBPAGE_SUMMARY_PROMPT,
     val fontChoice: String = "System",
     val themeMode: ThemeMode = ThemeMode.NORMAL,
 )
@@ -53,6 +55,10 @@ const val DEFAULT_EXPLAIN_PROMPT =
     "You are a helpful assistant. Explain the selected text in context of the discussion. " +
         "Be concise and informative. Use the reader's language. Format with markdown."
 
+const val DEFAULT_WEBPAGE_SUMMARY_PROMPT =
+    "Summarize this webpage concisely. Highlight key points, main arguments, and important details. " +
+        "Use the reader's language. Use markdown formatting."
+
 fun settingsFlow(context: Context): Flow<AppSettings> =
     context.dataStore.data.map { prefs ->
         AppSettings(
@@ -62,6 +68,7 @@ fun settingsFlow(context: Context): Flow<AppSettings> =
             llmMaxComments = prefs[SettingsKeys.LLM_MAX_COMMENTS] ?: 200,
             llmSystemPrompt = prefs[SettingsKeys.LLM_SYSTEM_PROMPT] ?: AppSettings().llmSystemPrompt,
             llmExplainPrompt = prefs[SettingsKeys.LLM_EXPLAIN_PROMPT] ?: AppSettings().llmExplainPrompt,
+            llmWebpageSummaryPrompt = prefs[SettingsKeys.LLM_WEBPAGE_SUMMARY_PROMPT] ?: AppSettings().llmWebpageSummaryPrompt,
             fontChoice = prefs[SettingsKeys.FONT_CHOICE] ?: "System",
             themeMode = ThemeMode.fromString(prefs[SettingsKeys.THEME_MODE] ?: "NORMAL"),
         )
