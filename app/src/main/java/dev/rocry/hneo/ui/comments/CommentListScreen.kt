@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.Story
-import dev.rocry.hneo.ui.components.PaginatedColumn
+import dev.rocry.hneo.ui.components.EinkPaginatedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,18 +85,34 @@ fun CommentListScreen(
                     )
                 }
             } else if (einkMode) {
-                // E-ink: paginated, no scrolling
-                PaginatedColumn(
-                    items = state.comments,
-                    itemsPerPage = 8,
+                // E-ink: paginated lazy list — handles variable-height comments
+                EinkPaginatedList(
                     modifier = Modifier.fillMaxSize(),
-                    header = { StoryHeader(story = story) },
-                ) { comment ->
-                    CommentItem(
-                        comment = comment,
-                        isCollapsed = comment.id in state.collapsedIds,
-                        onClick = { viewModel.toggleCollapse(comment.id) },
-                    )
+                    totalItemCount = state.comments.size + 1, // +1 for header
+                ) {
+                    item(key = "header") {
+                        StoryHeader(story = story)
+                    }
+                    items(
+                        items = state.comments,
+                        key = { it.id },
+                    ) { comment ->
+                        CommentItem(
+                            comment = comment,
+                            isCollapsed = comment.id in state.collapsedIds,
+                            onClick = { viewModel.toggleCollapse(comment.id) },
+                        )
+                    }
+                    if (state.comments.isEmpty() && !state.isLoading) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("No comments yet", style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
                 }
             } else {
                 // Normal: scrollable list

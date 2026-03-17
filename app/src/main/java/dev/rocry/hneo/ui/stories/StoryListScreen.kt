@@ -14,7 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.FeedKind
 import dev.rocry.hneo.model.Story
-import dev.rocry.hneo.ui.components.PaginatedColumn
+import dev.rocry.hneo.ui.components.EinkPaginatedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,28 +96,35 @@ fun StoryListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (einkMode) {
-                        Text("Loading...")
-                    } else {
-                        CircularProgressIndicator()
-                    }
+                    if (einkMode) Text("Loading...") else CircularProgressIndicator()
                 }
             } else if (einkMode) {
-                // E-ink: paginated, no scrolling, no animations
-                PaginatedColumn(
-                    items = state.stories,
-                    itemsPerPage = 10,
+                // E-ink: paginated lazy list
+                EinkPaginatedList(
                     modifier = Modifier.fillMaxSize(),
-                    onNearEnd = { viewModel.loadMore() },
-                ) { story ->
-                    StoryCard(
-                        story = story,
-                        onClick = { onStoryClick(story) },
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        thickness = 0.5.dp,
-                    )
+                    totalItemCount = state.stories.size,
+                ) {
+                    itemsIndexed(
+                        items = state.stories,
+                        key = { _, story -> story.id },
+                    ) { index, story ->
+                        StoryCard(
+                            story = story,
+                            onClick = { onStoryClick(story) },
+                        )
+                        if (index < state.stories.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                thickness = 0.5.dp,
+                            )
+                        }
+                        // Load more when near end
+                        if (index >= state.stories.size - 5) {
+                            LaunchedEffect(state.currentPage) {
+                                viewModel.loadMore()
+                            }
+                        }
+                    }
                 }
             } else {
                 // Normal: scrollable list with pull-to-refresh

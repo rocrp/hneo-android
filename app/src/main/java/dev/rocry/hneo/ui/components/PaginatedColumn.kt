@@ -4,128 +4,138 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+/**
+ * A LazyColumn that disables smooth scrolling and instead jumps by a screenful
+ * on vertical swipe. Designed for e-ink displays where animation causes ghosting.
+ *
+ * Use like a normal LazyColumn via the [content] lambda.
+ */
 @Composable
-fun <T> PaginatedColumn(
-    items: List<T>,
-    itemsPerPage: Int = 10,
+fun EinkPaginatedList(
     modifier: Modifier = Modifier,
-    onNearEnd: (() -> Unit)? = null,
-    header: (@Composable () -> Unit)? = null,
-    itemContent: @Composable (T) -> Unit,
+    totalItemCount: Int = 0,
+    content: LazyListScope.() -> Unit,
 ) {
-    val totalPages = if (items.isEmpty()) 1 else ((items.size + itemsPerPage - 1) / itemsPerPage)
-    var currentPage by remember { mutableIntStateOf(0) }
-    // Reset page when items change significantly
-    LaunchedEffect(items.size) {
-        if (currentPage >= totalPages) currentPage = (totalPages - 1).coerceAtLeast(0)
-    }
-
-    val pageStart = currentPage * itemsPerPage
-    val pageEnd = (pageStart + itemsPerPage).coerceAtMost(items.size)
-    val pageItems = if (items.isNotEmpty()) items.subList(pageStart, pageEnd) else emptyList()
-
-    // Trigger load more when on last page
-    if (currentPage >= totalPages - 1) {
-        LaunchedEffect(currentPage) { onNearEnd?.invoke() }
-    }
-
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(totalPages, currentPage) {
-                detectVerticalDragGestures(
-                    onDragStart = { dragAccumulator = 0f },
-                    onVerticalDrag = { _, dragAmount ->
-                        dragAccumulator += dragAmount
-                    },
-                    onDragEnd = {
-                        if (abs(dragAccumulator) > 100f) {
-                            if (dragAccumulator < 0 && currentPage < totalPages - 1) {
-                                currentPage++
-                            } else if (dragAccumulator > 0 && currentPage > 0) {
-                                currentPage--
+    val firstVisible by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+    val visibleCount by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.size.coerceAtLeast(1) }
+    }
+    val totalItems by remember {
+        derivedStateOf { listState.layoutInfo.totalItemsCount.coerceAtLeast(1) }
+    }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = { dragAccumulator = 0f },
+                        onVerticalDrag = { _, amount -> dragAccumulator += amount },
+                        onDragEnd = {
+                            if (abs(dragAccumulator) > 80f) {
+                                val target = if (dragAccumulator < 0) {
+                                    // swipe up → next page
+                                    (firstVisible + visibleCount).coerceAtMost(totalItems - 1)
+                                } else {
+                                    // swipe down → prev page
+                                    (firstVisible - visibleCount).coerceAtLeast(0)
+                                }
+                                scope.launch { listState.scrollToItem(target) }
                             }
-                        }
-                        dragAccumulator = 0f
-                    },
-                )
-            },
-    ) {
-        if (currentPage == 0 && header != null) {
-            header()
+                            dragAccumulator = 0f
+                        },
+                    )
+                },
+        ) {
+            LazyColumn(
+                state = listState,
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxSize(),
+                content = content,
+            )
         }
 
-        Column(modifier = Modifier.weight(1f)) {
-            for (item in pageItems) {
-                itemContent(item)
-            }
-        }
-
-        // Page controls — no ripple (this component is e-ink only)
-        if (totalPages > 1) {
+        // Page indicator
+        if (totalItems > visibleCount) {
             HorizontalDivider()
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NoRippleIconButton(
-                    onClick = { if (currentPage > 0) currentPage-- },
-                    enabled = currentPage > 0,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
-                }
-
-                Text(
-                    text = "${currentPage + 1} / $totalPages",
-                    style = MaterialTheme.typography.bodyMedium,
+                NoRippleTextButton(
+                    text = "Prev",
+                    enabled = firstVisible > 0,
+                    onClick = {
+                        scope.launch {
+                            listState.scrollToItem((firstVisible - visibleCount).coerceAtLeast(0))
+                        }
+                    },
                 )
 
-                NoRippleIconButton(
-                    onClick = { if (currentPage < totalPages - 1) currentPage++ },
-                    enabled = currentPage < totalPages - 1,
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
-                }
+                Text(
+                    text = "${firstVisible + 1}–${(firstVisible + visibleCount).coerceAtMost(totalItems)} / $totalItems",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                NoRippleTextButton(
+                    text = "Next",
+                    enabled = firstVisible + visibleCount < totalItems,
+                    onClick = {
+                        scope.launch {
+                            listState.scrollToItem(
+                                (firstVisible + visibleCount).coerceAtMost(totalItems - 1),
+                            )
+                        }
+                    },
+                )
             }
         }
     }
 }
 
 @Composable
-private fun NoRippleIconButton(
+private fun NoRippleTextButton(
+    text: String,
+    enabled: Boolean,
     onClick: () -> Unit,
-    enabled: Boolean = true,
-    content: @Composable () -> Unit,
 ) {
-    Box(
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (enabled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        },
         modifier = Modifier
-            .size(48.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = enabled,
-                role = Role.Button,
                 onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        content()
-    }
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
