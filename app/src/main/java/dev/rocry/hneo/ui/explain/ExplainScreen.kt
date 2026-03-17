@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +28,7 @@ fun ExplainScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val einkMode = LocalEinkMode.current
 
     Scaffold(
         topBar = {
@@ -72,7 +74,7 @@ fun ExplainScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
+                            if (!einkMode) CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Thinking...",
@@ -95,7 +97,7 @@ fun ExplainScreen(
                         )
                     }
 
-                    if (state.isStreaming) {
+                    if (state.isStreaming && !einkMode) {
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()

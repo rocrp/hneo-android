@@ -1,7 +1,5 @@
 package dev.rocry.hneo.ui.stories
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -13,10 +11,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.FeedKind
 import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.ui.components.PaginatedColumn
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,22 +25,24 @@ fun StoryListScreen(
     onSettingsClick: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
-    val context = LocalContext.current
+    val einkMode = LocalEinkMode.current
     val listState = rememberLazyListState()
 
-    // Prefetch comments for visible items
-    val visibleItems by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            info.visibleItemsInfo.mapNotNull { item ->
-                state.stories.getOrNull(item.index)?.id
+    // Prefetch comments for visible items (normal mode only)
+    if (!einkMode) {
+        val visibleItems by remember {
+            derivedStateOf {
+                val info = listState.layoutInfo
+                info.visibleItemsInfo.mapNotNull { item ->
+                    state.stories.getOrNull(item.index)?.id
+                }
             }
         }
-    }
 
-    LaunchedEffect(visibleItems) {
-        if (visibleItems.isNotEmpty()) {
-            viewModel.prefetchComments(visibleItems)
+        LaunchedEffect(visibleItems) {
+            if (visibleItems.isNotEmpty()) {
+                viewModel.prefetchComments(visibleItems)
+            }
         }
     }
 
@@ -73,29 +74,58 @@ fun StoryListScreen(
                 }
             }
 
-            PullToRefreshBox(
-                isRefreshing = state.isLoading,
-                onRefresh = { viewModel.refresh() },
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                if (state.error != null && state.stories.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = state.error ?: "Unknown error",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            TextButton(onClick = { viewModel.refresh() }) {
-                                Text("Retry")
-                            }
+            if (state.error != null && state.stories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = state.error ?: "Unknown error",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { viewModel.refresh() }) {
+                            Text("Retry")
                         }
                     }
-                } else {
+                }
+            } else if (state.isLoading && state.stories.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (einkMode) {
+                        Text("Loading...")
+                    } else {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (einkMode) {
+                // E-ink: paginated, no scrolling, no animations
+                PaginatedColumn(
+                    items = state.stories,
+                    itemsPerPage = 10,
+                    modifier = Modifier.fillMaxSize(),
+                    onNearEnd = { viewModel.loadMore() },
+                ) { story ->
+                    StoryCard(
+                        story = story,
+                        onClick = { onStoryClick(story) },
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        thickness = 0.5.dp,
+                    )
+                }
+            } else {
+                // Normal: scrollable list with pull-to-refresh
+                PullToRefreshBox(
+                    isRefreshing = state.isLoading,
+                    onRefresh = { viewModel.refresh() },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),

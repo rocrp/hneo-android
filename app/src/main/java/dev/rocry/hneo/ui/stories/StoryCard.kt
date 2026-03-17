@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.rocry.hneo.data.OpenGraphService
 import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 import dev.rocry.hneo.ui.theme.storyAccentColor
 import kotlinx.coroutines.launch
 
@@ -26,13 +27,17 @@ fun StoryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val einkMode = LocalEinkMode.current
     var thumbnailUrl by remember(story.url) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(story.url) {
-        story.url?.let { url ->
-            scope.launch {
-                thumbnailUrl = OpenGraphService.fetchOgImage(url)
+    // Skip thumbnail fetching in e-ink mode
+    if (!einkMode) {
+        LaunchedEffect(story.url) {
+            story.url?.let { url ->
+                scope.launch {
+                    thumbnailUrl = OpenGraphService.fetchOgImage(url)
+                }
             }
         }
     }
@@ -85,7 +90,8 @@ fun StoryCard(
             )
         }
 
-        if (thumbnailUrl != null) {
+        // No thumbnails in e-ink mode
+        if (!einkMode && thumbnailUrl != null) {
             Spacer(modifier = Modifier.width(12.dp))
             AsyncImage(
                 model = thumbnailUrl,

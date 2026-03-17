@@ -20,6 +20,16 @@ object SettingsKeys {
     val LLM_SYSTEM_PROMPT = stringPreferencesKey("llm_system_prompt")
     val LLM_EXPLAIN_PROMPT = stringPreferencesKey("llm_explain_prompt")
     val FONT_CHOICE = stringPreferencesKey("font_choice")
+    val THEME_MODE = stringPreferencesKey("theme_mode")
+}
+
+enum class ThemeMode(val label: String) {
+    NORMAL("Normal"),
+    EINK("E-Ink");
+
+    companion object {
+        fun fromString(s: String): ThemeMode = entries.find { it.name == s } ?: NORMAL
+    }
 }
 
 data class AppSettings(
@@ -30,6 +40,7 @@ data class AppSettings(
     val llmSystemPrompt: String = DEFAULT_SYSTEM_PROMPT,
     val llmExplainPrompt: String = DEFAULT_EXPLAIN_PROMPT,
     val fontChoice: String = "System",
+    val themeMode: ThemeMode = ThemeMode.NORMAL,
 )
 
 const val DEFAULT_SYSTEM_PROMPT =
@@ -52,6 +63,7 @@ fun settingsFlow(context: Context): Flow<AppSettings> =
             llmSystemPrompt = prefs[SettingsKeys.LLM_SYSTEM_PROMPT] ?: AppSettings().llmSystemPrompt,
             llmExplainPrompt = prefs[SettingsKeys.LLM_EXPLAIN_PROMPT] ?: AppSettings().llmExplainPrompt,
             fontChoice = prefs[SettingsKeys.FONT_CHOICE] ?: "System",
+            themeMode = ThemeMode.fromString(prefs[SettingsKeys.THEME_MODE] ?: "NORMAL"),
         )
     }
 

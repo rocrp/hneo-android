@@ -1,5 +1,6 @@
 package dev.rocry.hneo.ui.theme
 
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 // Catppuccin Frappe palette
@@ -33,7 +34,7 @@ object CatppuccinFrappe {
     val Crust = Color(0xFF232634)
 }
 
-// Rainbow colors for depth indicators and accent bars
+// Rainbow colors for depth indicators and accent bars (normal mode)
 val RainbowColors = listOf(
     CatppuccinFrappe.Blue,
     CatppuccinFrappe.Sapphire,
@@ -47,10 +48,18 @@ val RainbowColors = listOf(
     CatppuccinFrappe.Pink,
 )
 
-fun depthColor(depth: Int): Color =
-    if (depth <= 0) Color.Transparent else RainbowColors[(depth - 1) % RainbowColors.size]
+@Composable
+fun depthColor(depth: Int): Color {
+    if (depth <= 0) return Color.Transparent
+    val eink = LocalEinkMode.current
+    return if (eink) Color.Black else RainbowColors[(depth - 1) % RainbowColors.size]
+}
 
+@Composable
 fun storyAccentColor(score: Int?, comments: Int): Color {
+    val eink = LocalEinkMode.current
+    if (eink) return Color.Black
+
     val scoreImportance = ((score ?: 0).toFloat() / 500f).coerceIn(0f, 1f)
     val commentImportance = (comments.toFloat() / 200f).coerceIn(0f, 1f)
     val combined = scoreImportance * 0.7f + commentImportance * 0.3f

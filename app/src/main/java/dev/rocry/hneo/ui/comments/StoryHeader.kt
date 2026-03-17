@@ -14,17 +14,21 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import dev.rocry.hneo.data.OpenGraphService
 import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 
 @Composable
 fun StoryHeader(story: Story, modifier: Modifier = Modifier) {
+    val einkMode = LocalEinkMode.current
     var thumbnailUrl by remember(story.url) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(story.url) {
-        story.url?.let { url ->
-            scope.launch {
-                thumbnailUrl = OpenGraphService.fetchOgImage(url)
+    if (!einkMode) {
+        LaunchedEffect(story.url) {
+            story.url?.let { url ->
+                scope.launch {
+                    thumbnailUrl = OpenGraphService.fetchOgImage(url)
+                }
             }
         }
     }
@@ -49,7 +53,7 @@ fun StoryHeader(story: Story, modifier: Modifier = Modifier) {
                 }
             }
 
-            if (thumbnailUrl != null) {
+            if (!einkMode && thumbnailUrl != null) {
                 Spacer(modifier = Modifier.width(12.dp))
                 AsyncImage(
                     model = thumbnailUrl,

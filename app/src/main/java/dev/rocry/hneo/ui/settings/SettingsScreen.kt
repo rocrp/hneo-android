@@ -1,19 +1,32 @@
 package dev.rocry.hneo.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import dev.rocry.hneo.data.*
+import dev.rocry.hneo.ui.theme.FontInfo
+import dev.rocry.hneo.ui.theme.FontManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -25,10 +38,26 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     var settings by remember { mutableStateOf(AppSettings()) }
     var loaded by remember { mutableStateOf(false) }
+    var availableFonts by remember { mutableStateOf<List<FontInfo>>(emptyList()) }
+    var hasStoragePermission by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT >= 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        hasStoragePermission = granted
+        if (granted) availableFonts = FontManager.listAvailableFonts()
+    }
 
     LaunchedEffect(Unit) {
         settings = settingsFlow(context).first()
         loaded = true
+        availableFonts = FontManager.listAvailableFonts()
     }
 
     if (!loaded) return
@@ -61,6 +90,106 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            // Theme section
+            Text(
+                text = "Theme",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                ThemeMode.entries.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                        selected = settings.themeMode == mode,
+                        onClick = {
+                            settings = settings.copy(themeMode = mode)
+                            save(SettingsKeys.THEME_MODE, mode.name)
+                        },
+                    ) {
+                        Text(mode.label)
+                    }
+                }
+            }
+
+            HorizontalDivider()
+
+            // Font section
+            Text(
+                text = "Font",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            if (!hasStoragePermission && Build.VERSION.SDK_INT < 33) {
+                OutlinedButton(
+                    onClick = { permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Grant storage access to load custom fonts from /sdcard/Fonts/")
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                availableFonts.forEach { font ->
+                    val selected = settings.fontChoice == font.name
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (selected) {
+                                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                } else {
+                                    Modifier.border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant,
+                                        RoundedCornerShape(8.dp),
+                                    )
+                                },
+                            )
+                            .clickable {
+                                settings = settings.copy(fontChoice = font.name)
+                                save(SettingsKeys.FONT_CHOICE, font.name)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text(
+                                text = font.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                            if (font.path.isNotBlank()) {
+                                Text(
+                                    text = font.path.substringAfterLast("/"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        if (selected) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (availableFonts.none { it.path.isNotBlank() }) {
+                Text(
+                    text = "Place .ttf/.otf files in /sdcard/Fonts/ to add custom fonts",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider()
+
+            // AI section
             Text(
                 text = "AI Summary",
                 style = MaterialTheme.typography.titleMedium,

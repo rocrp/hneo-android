@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.data.PasteService
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +34,7 @@ fun SummaryScreen(
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val einkMode = LocalEinkMode.current
 
     Scaffold(
         topBar = {
@@ -117,7 +119,7 @@ fun SummaryScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
+                            if (!einkMode) CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = "Generating summary...",
@@ -140,7 +142,7 @@ fun SummaryScreen(
                         )
                     }
 
-                    if (state.isStreaming) {
+                    if (state.isStreaming && !einkMode) {
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.ui.components.PaginatedColumn
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,6 +30,7 @@ fun CommentListScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val einkMode = LocalEinkMode.current
 
     Scaffold(
         topBar = {
@@ -69,7 +72,7 @@ fun CommentListScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator()
+                    if (einkMode) Text("Loading...") else CircularProgressIndicator()
                 }
             } else if (state.error != null && state.comments.isEmpty()) {
                 Box(
@@ -81,7 +84,22 @@ fun CommentListScreen(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+            } else if (einkMode) {
+                // E-ink: paginated, no scrolling
+                PaginatedColumn(
+                    items = state.comments,
+                    itemsPerPage = 8,
+                    modifier = Modifier.fillMaxSize(),
+                    header = { StoryHeader(story = story) },
+                ) { comment ->
+                    CommentItem(
+                        comment = comment,
+                        isCollapsed = comment.id in state.collapsedIds,
+                        onClick = { viewModel.toggleCollapse(comment.id) },
+                    )
+                }
             } else {
+                // Normal: scrollable list
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     item(key = "header") {
                         StoryHeader(story = story)
