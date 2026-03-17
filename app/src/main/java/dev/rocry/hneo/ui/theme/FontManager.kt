@@ -1,6 +1,8 @@
 package dev.rocry.hneo.ui.theme
 
+import android.content.Context
 import android.graphics.Typeface as PlatformTypeface
+import android.net.Uri
 import android.os.Environment
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.font.FontFamily
@@ -11,36 +13,86 @@ val LocalFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default 
 data class FontInfo(val name: String, val path: String)
 
 object FontManager {
-    private val fontsDir = File(Environment.getExternalStorageDirectory(), "Fonts")
+    private val sdcardFontsDir = File(Environment.getExternalStorageDirectory(), "Fonts")
 
-    fun listAvailableFonts(): List<FontInfo> {
+    /** App-private fonts directory — no permissions needed */
+    fun getAppFontsDir(context: Context): File {
+        return File(context.filesDir, "fonts").also { it.mkdirs() }
+    }
+
+    /**
+     * Import a font file from a content URI (SAF) into app-private storage.
+     * Returns the FontInfo for the imported font, or null on failure.
+     */
+    fun importFont(context: Context, uri: Uri): FontInfo? {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        val displayName = cursor?.use { c ->
+            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+        } ?: uri.lastPathSegment ?: return null
+
+        val ext = displayName.substringAfterLast('.', "").lowercase()
+        if (ext !in listOf("ttf", "otf")) return null
+
+        val destFile = File(getAppFontsDir(context), displayName)
+        try {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                destFile.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            // Validate the font can be loaded
+            PlatformTypeface.createFromFile(destFile)
+        } catch (_: Exception) {
+            destFile.delete()
+            return null
+        }
+        return FontInfo(destFile.nameWithoutExtension, destFile.absolutePath)
+    }
+
+    /** Delete a custom font from app-private storage */
+    fun deleteFont(context: Context, fontInfo: FontInfo): Boolean {
+        if (fontInfo.path.isBlank()) return false
+        val file = File(fontInfo.path)
+        if (!file.absolutePath.startsWith(getAppFontsDir(context).absolutePath)) return false
+        return file.delete()
+    }
+
+    fun listAvailableFonts(context: Context): List<FontInfo> {
         val builtIn = listOf(
             FontInfo("System", ""),
             FontInfo("Serif", ""),
             FontInfo("Monospace", ""),
         )
 
-        val custom = if (fontsDir.exists() && fontsDir.isDirectory) {
-            fontsDir.listFiles()
-                ?.filter { it.extension.lowercase() in listOf("ttf", "otf") }
-                ?.sortedBy { it.nameWithoutExtension.lowercase() }
-                ?.map { FontInfo(it.nameWithoutExtension, it.absolutePath) }
-                ?: emptyList()
-        } else {
+        // App-private fonts (always accessible, no permission needed)
+        val appFonts = listFontsIn(getAppFontsDir(context))
+
+        // Legacy /sdcard/Fonts/ — works on older Android or with permission
+        val sdcardFonts = try {
+            listFontsIn(sdcardFontsDir)
+                .filter { sd -> appFonts.none { it.name == sd.name } } // deduplicate
+        } catch (_: Exception) {
             emptyList()
         }
 
-        return builtIn + custom
+        return builtIn + appFonts + sdcardFonts
     }
 
-    fun loadFontFamily(fontChoice: String): FontFamily {
+    private fun listFontsIn(dir: File): List<FontInfo> {
+        if (!dir.exists() || !dir.isDirectory) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.extension.lowercase() in listOf("ttf", "otf") }
+            ?.sortedBy { it.nameWithoutExtension.lowercase() }
+            ?.map { FontInfo(it.nameWithoutExtension, it.absolutePath) }
+            ?: emptyList()
+    }
+
+    fun loadFontFamily(fontChoice: String, context: Context): FontFamily {
         return when (fontChoice) {
             "System", "" -> FontFamily.Default
             "Serif" -> FontFamily.Serif
             "Monospace" -> FontFamily.Monospace
             else -> {
-                // Try loading from /sdcard/Fonts/
-                val fonts = listAvailableFonts()
+                val fonts = listAvailableFonts(context)
                 val info = fonts.find { it.name == fontChoice } ?: return FontFamily.Default
                 if (info.path.isBlank()) return FontFamily.Default
                 try {

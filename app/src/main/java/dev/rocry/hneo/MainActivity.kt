@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
             val settings by settingsFlow(this).collectAsState(initial = AppSettings())
             val einkMode = settings.themeMode == ThemeMode.EINK
             val fontFamily = remember(settings.fontChoice) {
-                FontManager.loadFontFamily(settings.fontChoice)
+                FontManager.loadFontFamily(settings.fontChoice, this)
             }
 
             HneoTheme(

@@ -14,7 +14,8 @@ object OpenGraphService {
         .followRedirects(true)
         .build()
 
-    private val cache = ConcurrentHashMap<String, String?>()
+    private val cache = ConcurrentHashMap<String, String>()
+    private val failedUrls = ConcurrentHashMap.newKeySet<String>()
     private val ogPattern = Regex(
         """<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']""",
         RegexOption.IGNORE_CASE,
@@ -26,15 +27,22 @@ object OpenGraphService {
 
     suspend fun fetchOgImage(url: String): String? {
         cache[url]?.let { return it }
+        if (url in failedUrls) return null
 
         return withContext(Dispatchers.IO) {
             try {
                 val request = Request.Builder().url(url).build()
                 val response = client.newCall(request).execute()
-                val body = response.body?.string()?.take(50_000) ?: return@withContext null
+                val body = response.body?.string()?.take(50_000) ?: run {
+                    failedUrls += url
+                    return@withContext null
+                }
                 val imageUrl = ogPattern.find(body)?.groupValues?.get(1)
                     ?: ogPatternReverse.find(body)?.groupValues?.get(1)
-                    ?: return@withContext null
+                    ?: run {
+                        failedUrls += url
+                        return@withContext null
+                    }
 
                 val resolved = when {
                     imageUrl.startsWith("http") -> imageUrl
@@ -52,7 +60,7 @@ object OpenGraphService {
                 cache[url] = resolved
                 resolved
             } catch (_: Exception) {
-                cache[url] = null
+                failedUrls += url
                 null
             }
         }

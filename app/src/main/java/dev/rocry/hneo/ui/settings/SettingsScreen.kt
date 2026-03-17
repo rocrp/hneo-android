@@ -1,8 +1,5 @@
 package dev.rocry.hneo.ui.settings
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -13,7 +10,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +21,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import dev.rocry.hneo.data.*
 import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.FontInfo
@@ -39,25 +37,22 @@ fun SettingsScreen(onBack: () -> Unit) {
     var settings by remember { mutableStateOf(AppSettings()) }
     var loaded by remember { mutableStateOf(false) }
     var availableFonts by remember { mutableStateOf<List<FontInfo>>(emptyList()) }
-    var hasStoragePermission by remember {
-        mutableStateOf(
-            Build.VERSION.SDK_INT >= 33 ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
-                PackageManager.PERMISSION_GRANTED,
-        )
-    }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        hasStoragePermission = granted
-        if (granted) availableFonts = FontManager.listAvailableFonts()
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val imported = FontManager.importFont(context, uri) ?: return@rememberLauncherForActivityResult
+        availableFonts = FontManager.listAvailableFonts(context)
+        // Auto-select the imported font
+        settings = settings.copy(fontChoice = imported.name)
+        scope.launch { updateSetting(context, SettingsKeys.FONT_CHOICE, imported.name) }
     }
 
     LaunchedEffect(Unit) {
         settings = settingsFlow(context).first()
         loaded = true
-        availableFonts = FontManager.listAvailableFonts()
+        availableFonts = FontManager.listAvailableFonts(context)
     }
 
     if (!loaded) return
@@ -115,24 +110,31 @@ fun SettingsScreen(onBack: () -> Unit) {
             HorizontalDivider()
 
             // Font section
-            Text(
-                text = "Font",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-
-            if (!hasStoragePermission && Build.VERSION.SDK_INT < 33) {
-                OutlinedButton(
-                    onClick = { permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE) },
-                    modifier = Modifier.fillMaxWidth(),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Font",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                FilledTonalButton(
+                    onClick = {
+                        fontPickerLauncher.launch(arrayOf("font/*", "application/octet-stream"))
+                    },
                 ) {
-                    Text("Grant storage access to load custom fonts from /sdcard/Fonts/")
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Import")
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 availableFonts.forEach { font ->
                     val selected = settings.fontChoice == font.name
+                    val isCustom = font.path.isNotBlank()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -155,12 +157,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = font.name,
                                 style = MaterialTheme.typography.bodyLarge,
                             )
-                            if (font.path.isNotBlank()) {
+                            if (isCustom) {
                                 Text(
                                     text = font.path.substringAfterLast("/"),
                                     style = MaterialTheme.typography.bodySmall,
@@ -168,24 +170,44 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 )
                             }
                         }
-                        if (selected) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = "Selected",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
+                        Row {
+                            if (selected) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            if (isCustom) {
+                                IconButton(
+                                    onClick = {
+                                        FontManager.deleteFont(context, font)
+                                        availableFonts = FontManager.listAvailableFonts(context)
+                                        if (settings.fontChoice == font.name) {
+                                            settings = settings.copy(fontChoice = "System")
+                                            save(SettingsKeys.FONT_CHOICE, "System")
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete font",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            if (availableFonts.none { it.path.isNotBlank() }) {
-                Text(
-                    text = "Place .ttf/.otf files in /sdcard/Fonts/ to add custom fonts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            Text(
+                text = "Import .ttf/.otf font files to use custom fonts",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             HorizontalDivider()
 
