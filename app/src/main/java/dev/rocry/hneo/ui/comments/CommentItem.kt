@@ -3,7 +3,6 @@ package dev.rocry.hneo.ui.comments
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -15,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.FlatComment
+import dev.rocry.hneo.ui.components.SelectableText
 import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.depthColor
 
@@ -24,6 +24,7 @@ fun CommentItem(
     isCollapsed: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onExplain: ((String) -> Unit)? = null,
 ) {
     val indent = 16.dp + (comment.depth * 12).dp.coerceAtMost(96.dp)
     val barColor = depthColor(comment.depth)
@@ -67,13 +68,12 @@ fun CommentItem(
 
             if (!isCollapsed) {
                 Spacer(modifier = Modifier.height(4.dp))
-                SelectionContainer {
-                    Text(
-                        text = comment.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                SelectableText(
+                    text = comment.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    onExplain = onExplain,
+                )
             }
         }
     }

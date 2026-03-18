@@ -1,12 +1,17 @@
 package dev.rocry.hneo.ui.navigation
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.rocry.hneo.data.AppSettings
+import dev.rocry.hneo.data.settingsFlow
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
@@ -40,6 +45,8 @@ private val json = Json { ignoreUnknownKeys = true }
 fun HneoNavGraph() {
     val navController = rememberNavController()
     val storyListViewModel: StoryListViewModel = viewModel()
+    val context = LocalContext.current
+    val settings by settingsFlow(context).collectAsState(initial = AppSettings())
 
     NavHost(navController = navController, startDestination = Routes.STORIES) {
         composable(Routes.STORIES) {
@@ -81,8 +88,17 @@ fun HneoNavGraph() {
                     navController.navigate("summary/$encoded")
                 },
                 onOpenUrl = { url ->
-                    val encoded = java.net.URLEncoder.encode(url, "UTF-8")
-                    navController.navigate("webview/$encoded")
+                    if (settings.openLinksInBrowser) {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    } else {
+                        val encoded = java.net.URLEncoder.encode(url, "UTF-8")
+                        navController.navigate("webview/$encoded")
+                    }
+                },
+                onExplain = { selectedText ->
+                    val encodedText = java.net.URLEncoder.encode(selectedText, "UTF-8")
+                    val encodedTitle = java.net.URLEncoder.encode(story.title, "UTF-8")
+                    navController.navigate("explain/$encodedText/$encodedTitle")
                 },
             )
         }

@@ -27,6 +27,7 @@ fun CommentListScreen(
     onBack: () -> Unit,
     onSummaryClick: () -> Unit,
     onOpenUrl: (String) -> Unit = {},
+    onExplain: (String) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -102,6 +103,7 @@ fun CommentListScreen(
                             comment = comment,
                             isCollapsed = comment.id in state.collapsedIds,
                             onClick = { viewModel.toggleCollapse(comment.id) },
+                            onExplain = { text -> onExplain(text) },
                         )
                     }
                     if (state.comments.isEmpty() && !state.isLoading) {
@@ -133,6 +135,7 @@ fun CommentListScreen(
                             comment = comment,
                             isCollapsed = comment.id in state.collapsedIds,
                             onClick = { viewModel.toggleCollapse(comment.id) },
+                            onExplain = { text -> onExplain(text) },
                         )
                     }
 
