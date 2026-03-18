@@ -35,9 +35,9 @@ fun WebViewScreen(
     onSummary: (pageTitle: String, pageContent: String, pageUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
-    val settings by settingsFlow(context).collectAsState(initial = AppSettings())
-    val readerFontCss = remember(settings.fontChoice) {
-        resolveReaderFontCss(settings.fontChoice, context)
+    val appSettings by settingsFlow(context).collectAsState(initial = AppSettings())
+    val readerFontCss = remember(appSettings.fontChoice) {
+        resolveReaderFontCss(appSettings.fontChoice, context)
     }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
