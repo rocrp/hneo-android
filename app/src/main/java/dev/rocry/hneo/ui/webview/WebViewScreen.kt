@@ -27,8 +27,6 @@ import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.settingsFlow
 import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
 import dev.rocry.hneo.ui.components.LocalVolumePageEvents
-import dev.rocry.hneo.ui.theme.FontManager
-import java.io.File
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -40,7 +38,7 @@ fun WebViewScreen(
     val context = LocalContext.current
     val appSettings by settingsFlow(context).collectAsState(initial = AppSettings())
     val readerFontCss = remember(appSettings.fontChoice) {
-        resolveReaderFontCss(appSettings.fontChoice, context)
+        resolveReaderFontCss(appSettings.fontChoice)
     }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -202,30 +200,12 @@ fun WebViewScreen(
 
 private data class ReaderFontCss(val fontFace: String, val fontFamily: String)
 
-private fun resolveReaderFontCss(fontChoice: String, context: android.content.Context): ReaderFontCss {
+private fun resolveReaderFontCss(fontChoice: String): ReaderFontCss {
     return when (fontChoice) {
         "System", "" -> ReaderFontCss("", "system-ui,-apple-system,Roboto,sans-serif")
         "Serif" -> ReaderFontCss("", "Georgia,serif")
         "Monospace" -> ReaderFontCss("", "'Courier New',Courier,monospace")
-        else -> {
-            val fonts = FontManager.listAvailableFonts(context)
-            val fontInfo = fonts.find { it.name == fontChoice }
-            if (fontInfo != null && fontInfo.path.isNotBlank()) {
-                val file = File(fontInfo.path)
-                if (file.exists()) {
-                    val bytes = file.readBytes()
-                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    val ext = file.extension.lowercase()
-                    val format = if (ext == "otf") "opentype" else "truetype"
-                    val fontFace = """@font-face{font-family:"CustomReaderFont";src:url("data:font/$ext;base64,$base64") format("$format")}"""
-                    ReaderFontCss(fontFace, """"CustomReaderFont",sans-serif""")
-                } else {
-                    ReaderFontCss("", "system-ui,sans-serif")
-                }
-            } else {
-                ReaderFontCss("", "system-ui,sans-serif")
-            }
-        }
+        else -> ReaderFontCss("", "system-ui,-apple-system,Roboto,sans-serif")
     }
 }
 
