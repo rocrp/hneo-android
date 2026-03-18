@@ -23,6 +23,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.rocry.hneo.data.AppSettings
+import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.ui.theme.FontManager
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -32,6 +35,10 @@ fun WebViewScreen(
     onSummary: (pageTitle: String, pageContent: String, pageUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
+    val settings by settingsFlow(context).collectAsState(initial = AppSettings())
+    val readerFontCss = remember(settings.fontChoice) {
+        resolveReaderFontCss(settings.fontChoice, context)
+    }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -67,7 +74,7 @@ fun WebViewScreen(
                         onClick = {
                             readerMode = !readerMode
                             if (readerMode) {
-                                webView?.evaluateJavascript(READER_MODE_JS, null)
+                                webView?.evaluateJavascript(readerModeJs(readerFontCss), null)
                             } else {
                                 webView?.reload()
                             }
@@ -131,6 +138,7 @@ fun WebViewScreen(
                         settings.domStorageEnabled = true
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
+                        settings.allowFileAccess = true
 
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
@@ -170,7 +178,30 @@ fun WebViewScreen(
     }
 }
 
-private const val READER_MODE_JS = """
+private data class ReaderFontCss(val fontFace: String, val fontFamily: String)
+
+private fun resolveReaderFontCss(fontChoice: String, context: android.content.Context): ReaderFontCss {
+    return when (fontChoice) {
+        "System", "" -> ReaderFontCss("", "system-ui,-apple-system,Roboto,sans-serif")
+        "Serif" -> ReaderFontCss("", "Georgia,serif")
+        "Monospace" -> ReaderFontCss("", "'Courier New',Courier,monospace")
+        else -> {
+            val fonts = FontManager.listAvailableFonts(context)
+            val fontInfo = fonts.find { it.name == fontChoice }
+            if (fontInfo != null && fontInfo.path.isNotBlank()) {
+                val fontFace = """@font-face{font-family:"CustomReaderFont";src:url("file://${fontInfo.path}")}"""
+                ReaderFontCss(fontFace, """"CustomReaderFont",sans-serif""")
+            } else {
+                ReaderFontCss("", "system-ui,sans-serif")
+            }
+        }
+    }
+}
+
+private fun readerModeJs(fontCss: ReaderFontCss): String {
+    val fontFaceRule = fontCss.fontFace.replace("'", "\\'")
+    val fontFamilyValue = fontCss.fontFamily.replace("'", "\\'")
+    return """
 (function() {
     var article = document.querySelector('article') ||
                   document.querySelector('[role="main"]') ||
@@ -186,7 +217,8 @@ private const val READER_MODE_JS = """
     for (var i = 0; i < remove.length; i++) remove[i].remove();
     document.head.innerHTML = '<meta name="viewport" content="width=device-width, initial-scale=1">' +
         '<style>' +
-        'body{max-width:680px;margin:0 auto;padding:20px 16px;font-family:Georgia,serif;' +
+        '$fontFaceRule' +
+        'body{max-width:680px;margin:0 auto;padding:20px 16px;font-family:$fontFamilyValue;' +
         'font-size:18px;line-height:1.8;color:#222;background:#fffff8}' +
         'img{max-width:100%;height:auto;border-radius:4px;margin:12px 0}' +
         'h1{font-size:24px;line-height:1.3;margin-bottom:16px}' +
@@ -199,3 +231,4 @@ private const val READER_MODE_JS = """
     document.body.innerHTML = '<h1>' + title + '</h1>' + temp.innerHTML;
 })()
 """
+}
