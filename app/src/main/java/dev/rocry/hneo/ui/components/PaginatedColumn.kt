@@ -23,6 +23,9 @@ import kotlin.math.abs
 /** Emits -1 for page up (volume up), +1 for page down (volume down). */
 val LocalVolumePageEvents = staticCompositionLocalOf<SharedFlow<Int>> { MutableSharedFlow() }
 
+/** Callback to enable/disable volume key interception from child composables. */
+val LocalSetVolumeKeyIntercept = staticCompositionLocalOf<(Boolean) -> Unit> { {} }
+
 /**
  * A LazyColumn that disables smooth scrolling and instead jumps by a screenful
  * on vertical swipe. Designed for e-ink displays where animation causes ghosting.

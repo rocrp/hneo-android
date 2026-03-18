@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.viewinterop.AndroidView
+import dev.rocry.hneo.ui.theme.LocalTypeface
 
 private const val MENU_ID_EXPLAIN = 1001
 
@@ -35,6 +36,7 @@ fun SelectableText(
         color
     }
     val density = LocalDensity.current
+    val androidTypeface = LocalTypeface.current
     val currentOnExplain = rememberUpdatedState(onExplain)
 
     AndroidView(
@@ -75,6 +77,7 @@ fun SelectableText(
         },
         update = { tv ->
             tv.text = text
+            tv.typeface = androidTypeface
             tv.setTextColor(resolvedColor.toArgb())
             // Convert Compose sp fontSize to Android textSize (in sp)
             tv.textSize = style.fontSize.value

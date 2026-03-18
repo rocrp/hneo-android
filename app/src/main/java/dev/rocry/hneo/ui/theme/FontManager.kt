@@ -9,6 +9,7 @@ import androidx.compose.ui.text.font.FontFamily
 import java.io.File
 
 val LocalFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
+val LocalTypeface = staticCompositionLocalOf<PlatformTypeface> { PlatformTypeface.DEFAULT }
 
 data class FontInfo(val name: String, val path: String)
 
@@ -84,6 +85,24 @@ object FontManager {
             ?.sortedBy { it.nameWithoutExtension.lowercase() }
             ?.map { FontInfo(it.nameWithoutExtension, it.absolutePath) }
             ?: emptyList()
+    }
+
+    fun loadTypeface(fontChoice: String, context: Context): PlatformTypeface {
+        return when (fontChoice) {
+            "System", "" -> PlatformTypeface.DEFAULT
+            "Serif" -> PlatformTypeface.SERIF
+            "Monospace" -> PlatformTypeface.MONOSPACE
+            else -> {
+                val fonts = listAvailableFonts(context)
+                val info = fonts.find { it.name == fontChoice } ?: return PlatformTypeface.DEFAULT
+                if (info.path.isBlank()) return PlatformTypeface.DEFAULT
+                try {
+                    PlatformTypeface.createFromFile(info.path)
+                } catch (_: Exception) {
+                    PlatformTypeface.DEFAULT
+                }
+            }
+        }
     }
 
     fun loadFontFamily(fontChoice: String, context: Context): FontFamily {
