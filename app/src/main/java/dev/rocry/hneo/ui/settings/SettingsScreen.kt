@@ -1,5 +1,6 @@
 package dev.rocry.hneo.ui.settings
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -21,12 +22,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import dev.rocry.hneo.BuildConfig
 import dev.rocry.hneo.data.*
 import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.FontInfo
 import dev.rocry.hneo.ui.theme.FontManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -353,7 +357,168 @@ fun SettingsScreen(onBack: () -> Unit) {
                 maxLines = 6,
             )
 
+            HorizontalDivider()
+
+            // About section
+            Text(
+                text = "About",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Text(
+                text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            UpdateSection()
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
+}
+
+private sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object NoUpdate : UpdateState
+    data class Available(val release: UpdateService.ReleaseInfo) : UpdateState
+    data class Downloading(val progress: Float) : UpdateState
+    data class Error(val message: String) : UpdateState
+}
+
+@Composable
+private fun UpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    var showDialog by remember { mutableStateOf(false) }
+
+    when (val s = state) {
+        is UpdateState.Idle -> {
+            FilledTonalButton(
+                onClick = {
+                    state = UpdateState.Checking
+                    scope.launch {
+                        state = try {
+                            val release = UpdateService.checkForUpdate(BuildConfig.VERSION_CODE)
+                            if (release != null) {
+                                showDialog = true
+                                UpdateState.Available(release)
+                            } else {
+                                UpdateState.NoUpdate
+                            }
+                        } catch (e: Exception) {
+                            UpdateState.Error(e.message ?: "Unknown error")
+                        }
+                    }
+                },
+            ) {
+                Text("Check for Updates")
+            }
+        }
+
+        is UpdateState.Checking -> {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text("Checking...", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        is UpdateState.NoUpdate -> {
+            Text(
+                text = "You're up to date",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FilledTonalButton(onClick = { state = UpdateState.Idle }) {
+                Text("Check Again")
+            }
+        }
+
+        is UpdateState.Available -> {
+            FilledTonalButton(onClick = { showDialog = true }) {
+                Text("Update available: ${s.release.versionName}")
+            }
+        }
+
+        is UpdateState.Downloading -> {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Downloading... ${(s.progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                LinearProgressIndicator(
+                    progress = { s.progress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        is UpdateState.Error -> {
+            Text(
+                text = s.message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            FilledTonalButton(onClick = { state = UpdateState.Idle }) {
+                Text("Retry")
+            }
+        }
+    }
+
+    if (showDialog && state is UpdateState.Available) {
+        val release = (state as UpdateState.Available).release
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text(release.versionName) },
+            text = {
+                Text(
+                    text = release.changelog.ifBlank { "No changelog available" },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDialog = false
+                    state = UpdateState.Downloading(0f)
+                    scope.launch {
+                        try {
+                            val file = UpdateService.downloadApk(
+                                context = context,
+                                url = release.downloadUrl,
+                                fileName = "hneo-${release.versionName}.apk",
+                                onProgress = { state = UpdateState.Downloading(it) },
+                            )
+                            installApk(context, file)
+                            state = UpdateState.Idle
+                        } catch (e: Exception) {
+                            state = UpdateState.Error("Download failed: ${e.message}")
+                        }
+                    }
+                }) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+}
+
+private fun installApk(context: android.content.Context, file: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
 }
