@@ -15,8 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+
+/** Emits -1 for page up (volume up), +1 for page down (volume down). */
+val LocalVolumePageEvents = staticCompositionLocalOf<SharedFlow<Int>> { MutableSharedFlow() }
 
 /**
  * A LazyColumn that disables smooth scrolling and instead jumps by a screenful
@@ -40,6 +45,19 @@ fun EinkPaginatedList(
     }
     val totalItems by remember {
         derivedStateOf { listState.layoutInfo.totalItemsCount.coerceAtLeast(1) }
+    }
+
+    // Volume key page turning
+    val volumeEvents = LocalVolumePageEvents.current
+    LaunchedEffect(Unit) {
+        volumeEvents.collect { direction ->
+            val target = if (direction < 0) {
+                (firstVisible - visibleCount).coerceAtLeast(0)
+            } else {
+                (firstVisible + visibleCount).coerceAtMost(totalItems - 1)
+            }
+            listState.scrollToItem(target)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
