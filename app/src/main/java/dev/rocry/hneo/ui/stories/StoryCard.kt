@@ -42,8 +42,6 @@ fun StoryCard(
         }
     }
 
-    val accentColor = storyAccentColor(story.points, story.commentsCount)
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -51,16 +49,18 @@ fun StoryCard(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        // Accent bar
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(48.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(accentColor),
-        )
-
-        Spacer(modifier = Modifier.width(12.dp))
+        // Accent bar — hidden in e-ink mode
+        if (!einkMode) {
+            val accentColor = storyAccentColor(story.points, story.commentsCount)
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(accentColor),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        }
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
