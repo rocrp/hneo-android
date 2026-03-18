@@ -28,6 +28,7 @@ import dev.rocry.hneo.data.settingsFlow
 import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
 import dev.rocry.hneo.ui.components.LocalVolumePageEvents
 import dev.rocry.hneo.ui.theme.FontManager
+import java.io.File
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -210,8 +211,17 @@ private fun resolveReaderFontCss(fontChoice: String, context: android.content.Co
             val fonts = FontManager.listAvailableFonts(context)
             val fontInfo = fonts.find { it.name == fontChoice }
             if (fontInfo != null && fontInfo.path.isNotBlank()) {
-                val fontFace = """@font-face{font-family:"CustomReaderFont";src:url("file://${fontInfo.path}")}"""
-                ReaderFontCss(fontFace, """"CustomReaderFont",sans-serif""")
+                val file = File(fontInfo.path)
+                if (file.exists()) {
+                    val bytes = file.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val ext = file.extension.lowercase()
+                    val format = if (ext == "otf") "opentype" else "truetype"
+                    val fontFace = """@font-face{font-family:"CustomReaderFont";src:url("data:font/$ext;base64,$base64") format("$format")}"""
+                    ReaderFontCss(fontFace, """"CustomReaderFont",sans-serif""")
+                } else {
+                    ReaderFontCss("", "system-ui,sans-serif")
+                }
             } else {
                 ReaderFontCss("", "system-ui,sans-serif")
             }
