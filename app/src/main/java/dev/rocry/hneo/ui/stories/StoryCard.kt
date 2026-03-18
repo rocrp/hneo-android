@@ -75,9 +75,9 @@ fun StoryCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             val meta = buildString {
-                story.domain?.let { append("$it  ·  ") }
-                story.points?.let { append("$it pts  ·  ") }
-                if (story.commentsCount > 0) append("${story.commentsCount} comments  ·  ")
+                story.domain?.let { append("$it · ") }
+                story.points?.let { append("${formatCount(it)} pt · ") }
+                if (story.commentsCount > 0) append("${formatCount(story.commentsCount)} cmt · ")
                 append(story.timeAgo)
             }
 
@@ -103,4 +103,10 @@ fun StoryCard(
             )
         }
     }
+}
+
+private fun formatCount(n: Int): String = when {
+    n >= 10_000 -> "${n / 1000}k"
+    n >= 1_000 -> "%.1fk".format(n / 1000.0).replace(".0k", "k")
+    else -> n.toString()
 }
