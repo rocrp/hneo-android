@@ -6,7 +6,6 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -18,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
+import com.mikepenz.markdown.m3.Markdown
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,16 +86,13 @@ fun ExplainScreen(
                     }
                 }
                 else -> {
-                    SelectionContainer {
-                        Text(
-                            text = state.text,
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(16.dp),
-                        )
-                    }
+                    Markdown(
+                        content = state.text,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
+                    )
 
                     if (state.isStreaming && !einkMode) {
                         LinearProgressIndicator(

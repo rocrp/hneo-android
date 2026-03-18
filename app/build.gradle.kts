@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.okhttp.sse)
     implementation(libs.coil.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.markdown.renderer.m3)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
