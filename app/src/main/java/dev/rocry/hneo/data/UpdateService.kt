@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 object UpdateService {
     private const val RELEASES_URL =
-        "https://api.github.com/repos/nicr9/hneo-android/releases/latest"
+        "https://api.github.com/repos/rocrp/hneo-android/releases/latest"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
