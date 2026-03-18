@@ -3,6 +3,7 @@ package dev.rocry.hneo.ui.webview
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -36,6 +39,7 @@ fun WebViewScreen(
     var pageFinished by remember { mutableStateOf(false) }
     var currentUrl by remember { mutableStateOf(url) }
     var currentTitle by remember { mutableStateOf("") }
+    var readerMode by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -61,6 +65,19 @@ fun WebViewScreen(
                     }
                     IconButton(
                         onClick = {
+                            readerMode = !readerMode
+                            if (readerMode) {
+                                webView?.evaluateJavascript(READER_MODE_JS, null)
+                            } else {
+                                webView?.reload()
+                            }
+                        },
+                        enabled = pageFinished,
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Article, contentDescription = "Reader Mode")
+                    }
+                    IconButton(
+                        onClick = {
                             webView?.evaluateJavascript("document.body.innerText") { result ->
                                 val text = result
                                     ?.removeSurrounding("\"")
@@ -76,6 +93,12 @@ fun WebViewScreen(
                         enabled = pageFinished,
                     ) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = "AI Summary")
+                    }
+                    IconButton(onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
+                        context.startActivity(intent)
+                    }) {
+                        Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in Browser")
                     }
                     IconButton(onClick = { webView?.reload() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reload")
@@ -112,6 +135,7 @@ fun WebViewScreen(
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                                 pageFinished = false
+                                readerMode = false
                                 canGoBack = view.canGoBack()
                                 canGoForward = view.canGoForward()
                             }
@@ -145,3 +169,33 @@ fun WebViewScreen(
         }
     }
 }
+
+private const val READER_MODE_JS = """
+(function() {
+    var article = document.querySelector('article') ||
+                  document.querySelector('[role="main"]') ||
+                  document.querySelector('main') ||
+                  document.querySelector('.post-content, .article-content, .entry-content, .content');
+    var title = document.title;
+    var content = article ? article.innerHTML : document.body.innerHTML;
+    var temp = document.createElement('div');
+    temp.innerHTML = content;
+    var remove = temp.querySelectorAll('script, style, nav, footer, header, aside, iframe, ' +
+        '.ad, .ads, .sidebar, .comments, .social, .share, .related, .newsletter, .popup, ' +
+        '.modal, .cookie, [role="banner"], [role="navigation"], [role="complementary"]');
+    for (var i = 0; i < remove.length; i++) remove[i].remove();
+    document.head.innerHTML = '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<style>' +
+        'body{max-width:680px;margin:0 auto;padding:20px 16px;font-family:Georgia,serif;' +
+        'font-size:18px;line-height:1.8;color:#222;background:#fffff8}' +
+        'img{max-width:100%;height:auto;border-radius:4px;margin:12px 0}' +
+        'h1{font-size:24px;line-height:1.3;margin-bottom:16px}' +
+        'a{color:#1a73e8}' +
+        'pre,code{font-size:14px;background:#f5f5f5;padding:2px 6px;border-radius:3px;overflow-x:auto}' +
+        'pre{padding:12px;margin:12px 0}' +
+        'blockquote{border-left:3px solid #ddd;margin:12px 0;padding-left:16px;color:#555}' +
+        'p{margin:0 0 16px}' +
+        '</style>';
+    document.body.innerHTML = '<h1>' + title + '</h1>' + temp.innerHTML;
+})()
+"""

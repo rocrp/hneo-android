@@ -211,6 +211,47 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             HorizontalDivider()
 
+            // Browser section
+            Text(
+                text = "Browser",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .einkClickable {
+                        val newValue = !settings.openLinksInBrowser
+                        settings = settings.copy(openLinksInBrowser = newValue)
+                        scope.launch { updateSetting(context, SettingsKeys.OPEN_LINKS_IN_BROWSER, newValue) }
+                    }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Open links in external browser",
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = "Use default browser instead of in-app webview",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.openLinksInBrowser,
+                    onCheckedChange = { newValue ->
+                        settings = settings.copy(openLinksInBrowser = newValue)
+                        scope.launch { updateSetting(context, SettingsKeys.OPEN_LINKS_IN_BROWSER, newValue) }
+                    },
+                )
+            }
+
+            HorizontalDivider()
+
             // AI section
             Text(
                 text = "AI Summary",
