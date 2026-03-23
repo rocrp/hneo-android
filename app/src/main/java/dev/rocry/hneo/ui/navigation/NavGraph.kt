@@ -2,16 +2,19 @@ package dev.rocry.hneo.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import dev.rocry.hneo.data.AppSettings
-import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.BuildConfig
+import dev.rocry.hneo.data.*
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
@@ -26,6 +29,7 @@ import dev.rocry.hneo.ui.webview.WebSummaryData
 import dev.rocry.hneo.ui.webview.WebSummaryScreen
 import dev.rocry.hneo.ui.webview.WebSummaryViewModel
 import dev.rocry.hneo.ui.webview.WebViewScreen
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -47,6 +51,72 @@ fun HneoNavGraph() {
     val storyListViewModel: StoryListViewModel = viewModel()
     val context = LocalContext.current
     val settings by settingsFlow(context).collectAsState(initial = AppSettings())
+    val scope = rememberCoroutineScope()
+
+    var autoUpdateRelease by remember { mutableStateOf<UpdateService.ReleaseInfo?>(null) }
+    var autoUpdateDownloadProgress by remember { mutableStateOf<Float?>(null) }
+
+    LaunchedEffect(Unit) {
+        autoUpdateRelease = UpdateChecker.checkIfNeeded(context, BuildConfig.VERSION_CODE)
+    }
+
+    autoUpdateRelease?.let { release ->
+        if (autoUpdateDownloadProgress != null) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Downloading ${release.versionName}") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${(autoUpdateDownloadProgress!! * 100).toInt()}%")
+                        LinearProgressIndicator(
+                            progress = { autoUpdateDownloadProgress!! },
+                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {},
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { autoUpdateRelease = null },
+                title = { Text("Update Available") },
+                text = {
+                    Text(
+                        text = "${release.versionName}\n\n${release.changelog.ifBlank { "No changelog available" }}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        autoUpdateDownloadProgress = 0f
+                        scope.launch {
+                            try {
+                                val file = UpdateService.downloadApk(
+                                    context = context,
+                                    url = release.downloadUrl,
+                                    fileName = "hneo-${release.versionName}.apk",
+                                    onProgress = { autoUpdateDownloadProgress = it },
+                                )
+                                UpdateService.installApk(context, file)
+                                autoUpdateRelease = null
+                                autoUpdateDownloadProgress = null
+                            } catch (_: Exception) {
+                                autoUpdateRelease = null
+                                autoUpdateDownloadProgress = null
+                            }
+                        }
+                    }) {
+                        Text("Download")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { autoUpdateRelease = null }) {
+                        Text("Later")
+                    }
+                },
+            )
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.STORIES) {
         composable(Routes.STORIES) {

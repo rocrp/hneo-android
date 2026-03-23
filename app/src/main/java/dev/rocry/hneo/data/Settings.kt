@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,8 @@ object SettingsKeys {
     val FONT_CHOICE = stringPreferencesKey("font_choice")
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val OPEN_LINKS_IN_BROWSER = booleanPreferencesKey("open_links_in_browser")
+    val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
+    val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
 }
 
 enum class ThemeMode(val label: String) {
@@ -46,6 +49,8 @@ data class AppSettings(
     val fontChoice: String = "System",
     val themeMode: ThemeMode = ThemeMode.NORMAL,
     val openLinksInBrowser: Boolean = false,
+    val autoUpdateEnabled: Boolean = true,
+    val lastUpdateCheck: Long = 0L,
 )
 
 const val DEFAULT_SYSTEM_PROMPT =
@@ -75,6 +80,8 @@ fun settingsFlow(context: Context): Flow<AppSettings> =
             fontChoice = prefs[SettingsKeys.FONT_CHOICE] ?: "System",
             themeMode = ThemeMode.fromString(prefs[SettingsKeys.THEME_MODE] ?: "NORMAL"),
             openLinksInBrowser = prefs[SettingsKeys.OPEN_LINKS_IN_BROWSER] ?: false,
+            autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: true,
+            lastUpdateCheck = prefs[SettingsKeys.LAST_UPDATE_CHECK] ?: 0L,
         )
     }
 
@@ -87,5 +94,9 @@ suspend fun updateSetting(context: Context, key: Preferences.Key<Int>, value: In
 }
 
 suspend fun updateSetting(context: Context, key: Preferences.Key<Boolean>, value: Boolean) {
+    context.dataStore.edit { it[key] = value }
+}
+
+suspend fun updateSetting(context: Context, key: Preferences.Key<Long>, value: Long) {
     context.dataStore.edit { it[key] = value }
 }
