@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
+import dev.rocry.hneo.ui.components.EinkPaginatedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,20 +87,33 @@ fun ExplainScreen(
                     }
                 }
                 else -> {
-                    Markdown(
-                        content = state.text,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp),
-                    )
-
-                    if (state.isStreaming && !einkMode) {
-                        LinearProgressIndicator(
+                    if (einkMode) {
+                        EinkPaginatedList(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                Markdown(
+                                    content = state.text,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        Markdown(
+                            content = state.text,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.BottomCenter),
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(16.dp),
                         )
+
+                        if (state.isStreaming) {
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .align(Alignment.BottomCenter),
+                            )
+                        }
                     }
                 }
             }
