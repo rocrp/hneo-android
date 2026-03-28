@@ -50,14 +50,18 @@ fun EinkPaginatedList(
         derivedStateOf { listState.layoutInfo.totalItemsCount.coerceAtLeast(1) }
     }
 
+    // Jump size: overlap by 1 item so the last partially-visible item
+    // becomes the first item on the next page (no content skipped).
+    val jump by remember { derivedStateOf { (visibleCount - 1).coerceAtLeast(1) } }
+
     // Volume key page turning
     val volumeEvents = LocalVolumePageEvents.current
     LaunchedEffect(Unit) {
         volumeEvents.collect { direction ->
             val target = if (direction < 0) {
-                (firstVisible - visibleCount).coerceAtLeast(0)
+                (firstVisible - jump).coerceAtLeast(0)
             } else {
-                (firstVisible + visibleCount).coerceAtMost(totalItems - 1)
+                (firstVisible + jump).coerceAtMost(totalItems - 1)
             }
             listState.scrollToItem(target)
         }
@@ -75,10 +79,10 @@ fun EinkPaginatedList(
                             if (abs(dragAccumulator) > 80f) {
                                 val target = if (dragAccumulator < 0) {
                                     // swipe up → next page
-                                    (firstVisible + visibleCount).coerceAtMost(totalItems - 1)
+                                    (firstVisible + jump).coerceAtMost(totalItems - 1)
                                 } else {
                                     // swipe down → prev page
-                                    (firstVisible - visibleCount).coerceAtLeast(0)
+                                    (firstVisible - jump).coerceAtLeast(0)
                                 }
                                 scope.launch { listState.scrollToItem(target) }
                             }
@@ -110,7 +114,7 @@ fun EinkPaginatedList(
                     enabled = firstVisible > 0,
                     onClick = {
                         scope.launch {
-                            listState.scrollToItem((firstVisible - visibleCount).coerceAtLeast(0))
+                            listState.scrollToItem((firstVisible - jump).coerceAtLeast(0))
                         }
                     },
                 )
@@ -126,7 +130,7 @@ fun EinkPaginatedList(
                     onClick = {
                         scope.launch {
                             listState.scrollToItem(
-                                (firstVisible + visibleCount).coerceAtMost(totalItems - 1),
+                                (firstVisible + jump).coerceAtMost(totalItems - 1),
                             )
                         }
                     },
