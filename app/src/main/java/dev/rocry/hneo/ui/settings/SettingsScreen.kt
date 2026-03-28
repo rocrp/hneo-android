@@ -382,7 +382,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Text(
-                        text = "Check once per day on app launch",
+                        text = "Check on app launch at the chosen interval",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -394,6 +394,25 @@ fun SettingsScreen(onBack: () -> Unit) {
                         scope.launch { updateSetting(context, SettingsKeys.AUTO_UPDATE_ENABLED, newValue) }
                     },
                 )
+            }
+
+            if (settings.autoUpdateEnabled) {
+                val intervalOptions = listOf(6, 12, 24, 72, 168) // hours
+                val intervalLabels = listOf("6h", "12h", "1 day", "3 days", "7 days")
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    intervalOptions.forEachIndexed { index, hours ->
+                        SegmentedButton(
+                            shape = SegmentedButtonDefaults.itemShape(index, intervalOptions.size),
+                            selected = settings.updateCheckIntervalHours == hours,
+                            onClick = {
+                                settings = settings.copy(updateCheckIntervalHours = hours)
+                                saveInt(SettingsKeys.UPDATE_CHECK_INTERVAL_HOURS, hours)
+                            },
+                        ) {
+                            Text(intervalLabels[index], style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
 
             Text(

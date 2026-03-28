@@ -26,6 +26,7 @@ object SettingsKeys {
     val THEME_MODE = stringPreferencesKey("theme_mode")
     val OPEN_LINKS_IN_BROWSER = booleanPreferencesKey("open_links_in_browser")
     val AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
+    val UPDATE_CHECK_INTERVAL_HOURS = intPreferencesKey("update_check_interval_hours")
     val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check")
 }
 
@@ -50,6 +51,7 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.NORMAL,
     val openLinksInBrowser: Boolean = false,
     val autoUpdateEnabled: Boolean = true,
+    val updateCheckIntervalHours: Int = 24,
     val lastUpdateCheck: Long = 0L,
 )
 
@@ -81,6 +83,7 @@ fun settingsFlow(context: Context): Flow<AppSettings> =
             themeMode = ThemeMode.fromString(prefs[SettingsKeys.THEME_MODE] ?: "NORMAL"),
             openLinksInBrowser = prefs[SettingsKeys.OPEN_LINKS_IN_BROWSER] ?: false,
             autoUpdateEnabled = prefs[SettingsKeys.AUTO_UPDATE_ENABLED] ?: true,
+            updateCheckIntervalHours = prefs[SettingsKeys.UPDATE_CHECK_INTERVAL_HOURS] ?: 24,
             lastUpdateCheck = prefs[SettingsKeys.LAST_UPDATE_CHECK] ?: 0L,
         )
     }
