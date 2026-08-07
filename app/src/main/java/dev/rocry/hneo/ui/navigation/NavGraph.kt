@@ -2,12 +2,10 @@ package dev.rocry.hneo.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
@@ -16,7 +14,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.rocry.hneo.data.AppSettings
-import dev.rocry.hneo.data.ReleaseInfo
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
@@ -25,9 +22,8 @@ import dev.rocry.hneo.ui.llmdocument.LlmDocumentViewModel
 import dev.rocry.hneo.ui.settings.SettingsScreen
 import dev.rocry.hneo.ui.stories.StoryListScreen
 import dev.rocry.hneo.ui.stories.StoryListViewModel
+import dev.rocry.hneo.ui.update.UpdatePrompt
 import dev.rocry.hneo.ui.webview.WebViewScreen
-import kotlinx.coroutines.launch
-import java.io.File
 
 @Composable
 fun HneoNavGraph() {
@@ -36,75 +32,10 @@ fun HneoNavGraph() {
     val storyListViewModel: StoryListViewModel = viewModel(factory = container.viewModelFactory)
     val context = LocalContext.current
     val settings by container.settings.settings.collectAsState(initial = AppSettings())
-    val scope = rememberCoroutineScope()
 
-    var autoUpdateRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
-    var autoUpdateDownloadProgress by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(Unit) { container.appUpdater.checkOnLaunch() }
 
-    LaunchedEffect(Unit) {
-        autoUpdateRelease = container.updateChecker.checkIfNeeded()
-    }
-
-    autoUpdateRelease?.let { release ->
-        val progress = autoUpdateDownloadProgress
-        if (progress != null) {
-            AlertDialog(
-                onDismissRequest = {},
-                title = { Text("Downloading ${release.versionName}") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${(progress * 100).toInt()}%")
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                },
-                confirmButton = {},
-            )
-        } else {
-            AlertDialog(
-                onDismissRequest = { autoUpdateRelease = null },
-                title = { Text("Update Available") },
-                text = {
-                    Text(
-                        text = "${release.versionName}\n\n${release.changelog.ifBlank { "No changelog available" }}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        autoUpdateDownloadProgress = 0f
-                        scope.launch {
-                            try {
-                                val file = container.updateService.downloadApk(
-                                    url = release.downloadUrl,
-                                    destination = File(
-                                        container.updatesDir,
-                                        "hneo-${release.versionName}.apk",
-                                    ),
-                                    onProgress = { autoUpdateDownloadProgress = it },
-                                )
-                                container.updateService.installApk(context, file)
-                            } catch (_: Exception) {
-                                // Nothing the user can do here; the manual check reports properly.
-                            } finally {
-                                autoUpdateRelease = null
-                                autoUpdateDownloadProgress = null
-                            }
-                        }
-                    }) {
-                        Text("Download")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { autoUpdateRelease = null }) {
-                        Text("Later")
-                    }
-                },
-            )
-        }
-    }
+    UpdatePrompt(updater = container.appUpdater)
 
     fun openUrl(url: String) {
         if (settings.openLinksInBrowser) {

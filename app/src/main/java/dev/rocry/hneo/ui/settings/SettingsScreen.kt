@@ -23,7 +23,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.BuildConfig
 import dev.rocry.hneo.data.*
+import dev.rocry.hneo.data.update.UpdateState
 import dev.rocry.hneo.di.LocalAppContainer
+import dev.rocry.hneo.ui.components.LoadingIndicator
 import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.BuiltInFont
 import dev.rocry.hneo.ui.theme.FontInfo
@@ -427,142 +429,72 @@ fun SettingsScreen(onBack: () -> Unit) {
     }
 }
 
-private sealed interface UpdateState {
-    data object Idle : UpdateState
-    data object Checking : UpdateState
-    data object NoUpdate : UpdateState
-    data class Available(val release: ReleaseInfo) : UpdateState
-    data class Downloading(val progress: Float) : UpdateState
-    data class Error(val message: String) : UpdateState
-}
-
+/** The settings-screen face of the AppUpdater — the same state machine, no second copy. */
 @Composable
 private fun UpdateSection() {
-    val context = LocalContext.current
+    val updater = LocalAppContainer.current.appUpdater
     val scope = rememberCoroutineScope()
-    val container = LocalAppContainer.current
-    var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
-    var showDialog by remember { mutableStateOf(false) }
+    val state by updater.state.collectAsState()
 
-    when (val s = state) {
-        is UpdateState.Idle -> {
-            FilledTonalButton(
-                onClick = {
-                    state = UpdateState.Checking
-                    scope.launch {
-                        state = try {
-                            val release = container.updateService.fetchLatestRelease()
-                                .takeIf { it.buildNumber > BuildConfig.VERSION_CODE }
-                            if (release != null) {
-                                showDialog = true
-                                UpdateState.Available(release)
-                            } else {
-                                UpdateState.NoUpdate
-                            }
-                        } catch (e: Exception) {
-                            UpdateState.Error(e.message ?: "Unknown error")
-                        }
-                    }
-                },
-            ) {
-                Text("Check for Updates")
-            }
-        }
+    when (val current = state) {
+        is UpdateState.Checking -> LoadingIndicator(caption = "Checking...", compact = true)
 
-        is UpdateState.Checking -> {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text("Checking...", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        is UpdateState.NoUpdate -> {
+        is UpdateState.UpToDate -> {
             Text(
                 text = "You're up to date",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            FilledTonalButton(onClick = { state = UpdateState.Idle }) {
+            FilledTonalButton(onClick = { scope.launch { updater.checkNow() } }) {
                 Text("Check Again")
             }
         }
 
         is UpdateState.Available -> {
-            FilledTonalButton(onClick = { showDialog = true }) {
-                Text("Update available: ${s.release.versionName}")
+            Text(
+                text = "${current.release.versionName} is available",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (current.release.changelog.isNotBlank()) {
+                Text(
+                    text = current.release.changelog,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            FilledTonalButton(onClick = { updater.download(current.release) }) {
+                Text("Download and install")
             }
         }
 
         is UpdateState.Downloading -> {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Downloading... ${(s.progress * 100).toInt()}%",
+                    text = "Downloading... ${(current.progress * 100).toInt()}%",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 LinearProgressIndicator(
-                    progress = { s.progress },
+                    progress = { current.progress },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
 
-        is UpdateState.Error -> {
+        is UpdateState.Failed -> {
             Text(
-                text = s.message,
+                text = current.message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
-            FilledTonalButton(onClick = { state = UpdateState.Idle }) {
+            FilledTonalButton(onClick = { scope.launch { updater.checkNow() } }) {
                 Text("Retry")
             }
         }
-    }
 
-    if (showDialog && state is UpdateState.Available) {
-        val release = (state as UpdateState.Available).release
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text(release.versionName) },
-            text = {
-                Text(
-                    text = release.changelog.ifBlank { "No changelog available" },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDialog = false
-                    state = UpdateState.Downloading(0f)
-                    scope.launch {
-                        try {
-                            val file = container.updateService.downloadApk(
-                                url = release.downloadUrl,
-                                destination = File(
-                                    container.updatesDir,
-                                    "hneo-${release.versionName}.apk",
-                                ),
-                                onProgress = { state = UpdateState.Downloading(it) },
-                            )
-                            container.updateService.installApk(context, file)
-                            state = UpdateState.Idle
-                        } catch (e: Exception) {
-                            state = UpdateState.Error("Download failed: ${e.message}")
-                        }
-                    }
-                }) {
-                    Text("Download")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-        )
+        is UpdateState.Idle -> {
+            FilledTonalButton(onClick = { scope.launch { updater.checkNow() } }) {
+                Text("Check for Updates")
+            }
+        }
     }
 }
-
-

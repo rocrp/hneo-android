@@ -16,19 +16,21 @@ import dev.rocry.hneo.data.SettingsStore
 import dev.rocry.hneo.data.StoryCache
 import dev.rocry.hneo.data.StoryRepository
 import dev.rocry.hneo.data.SummaryCache
-import dev.rocry.hneo.data.UpdateChecker
-import dev.rocry.hneo.data.UpdateService
 import dev.rocry.hneo.data.http.HttpEngine
 import dev.rocry.hneo.data.http.JsonHttp
 import dev.rocry.hneo.data.http.OkHttpEngine
 import dev.rocry.hneo.data.llm.LlmClient
 import dev.rocry.hneo.data.llm.OpenAiLlmClient
 import dev.rocry.hneo.data.settingsDataStore
+import dev.rocry.hneo.data.update.AppUpdater
+import dev.rocry.hneo.data.update.UpdateService
 import dev.rocry.hneo.ui.comments.CommentListViewModel
 import dev.rocry.hneo.ui.llmdocument.LlmDocumentViewModel
 import dev.rocry.hneo.ui.stories.StoryListViewModel
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import java.io.File
@@ -70,7 +72,7 @@ class AppContainer(
     val llmClient: LlmClient = OpenAiLlmClient(httpEngine, json, settings, dispatchers.io)
     val openGraphService = OpenGraphService(jsonHttp)
     val pasteService = PasteService(jsonHttp)
-    val updateService = UpdateService(jsonHttp, httpEngine, dispatchers.io)
+    private val updateService = UpdateService(jsonHttp, httpEngine, json, dispatchers.io)
 
     private val storyCache = StoryCache(File(appContext.cacheDir, "stories"), json, dispatchers.io)
     private val commentCache = CommentCache()
@@ -79,8 +81,17 @@ class AppContainer(
     val pageTextCache = PageTextCache()
     val summaryCache = SummaryCache(File(appContext.cacheDir, "summaries.json"), json, dispatchers.io)
 
-    val updatesDir: File = File(appContext.cacheDir, "updates")
-    val updateChecker = UpdateChecker(settings, updateService, BuildConfig.VERSION_CODE)
+    /** Downloads outlive the screen that started them. */
+    private val applicationScope = CoroutineScope(SupervisorJob() + dispatchers.default)
+
+    val appUpdater = AppUpdater(
+        updateService = updateService,
+        settings = settings,
+        installer = { file -> updateService.installApk(appContext, file) },
+        currentVersionCode = BuildConfig.VERSION_CODE,
+        updatesDir = File(appContext.cacheDir, "updates"),
+        scope = applicationScope,
+    )
 
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
         initializer { StoryListViewModel(storyRepository) }
