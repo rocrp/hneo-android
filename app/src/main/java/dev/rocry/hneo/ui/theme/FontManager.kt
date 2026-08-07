@@ -4,8 +4,10 @@ import android.content.Context
 import android.graphics.Typeface as PlatformTypeface
 import android.net.Uri
 import android.os.Environment
+import android.provider.OpenableColumns
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.text.font.FontFamily
+import dev.rocry.hneo.ui.webview.ReaderFont
 import java.io.File
 
 val LocalFontFamily = staticCompositionLocalOf<FontFamily> { FontFamily.Default }
@@ -13,13 +15,13 @@ val LocalTypeface = staticCompositionLocalOf<PlatformTypeface> { PlatformTypefac
 
 data class FontInfo(val name: String, val path: String)
 
+private val FONT_EXTENSIONS = setOf("ttf", "otf")
+
 object FontManager {
     private val sdcardFontsDir = File(Environment.getExternalStorageDirectory(), "Fonts")
 
     /** App-private fonts directory — no permissions needed */
-    fun getAppFontsDir(context: Context): File {
-        return File(context.filesDir, "fonts").also { it.mkdirs() }
-    }
+    fun getAppFontsDir(context: Context): File = File(context.filesDir, "fonts").also { it.mkdirs() }
 
     /**
      * Import a font file from a content URI (SAF) into app-private storage.
@@ -28,12 +30,11 @@ object FontManager {
     fun importFont(context: Context, uri: Uri): FontInfo? {
         val cursor = context.contentResolver.query(uri, null, null, null, null)
         val displayName = cursor?.use { c ->
-            val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
         } ?: uri.lastPathSegment ?: return null
 
-        val ext = displayName.substringAfterLast('.', "").lowercase()
-        if (ext !in listOf("ttf", "otf")) return null
+        if (displayName.substringAfterLast('.', "").lowercase() !in FONT_EXTENSIONS) return null
 
         val destFile = File(getAppFontsDir(context), displayName)
         try {
@@ -58,19 +59,12 @@ object FontManager {
     }
 
     fun listAvailableFonts(context: Context): List<FontInfo> {
-        val builtIn = listOf(
-            FontInfo("System", ""),
-            FontInfo("Serif", ""),
-            FontInfo("Monospace", ""),
-        )
-
-        // App-private fonts (always accessible, no permission needed)
+        val builtIn = BuiltInFont.entries.map { FontInfo(it.displayName, "") }
         val appFonts = listFontsIn(getAppFontsDir(context))
 
         // Legacy /sdcard/Fonts/ — works on older Android or with permission
         val sdcardFonts = try {
-            listFontsIn(sdcardFontsDir)
-                .filter { sd -> appFonts.none { it.name == sd.name } } // deduplicate
+            listFontsIn(sdcardFontsDir).filter { sd -> appFonts.none { it.name == sd.name } }
         } catch (_: Exception) {
             emptyList()
         }
@@ -78,49 +72,70 @@ object FontManager {
         return builtIn + appFonts + sdcardFonts
     }
 
+    /**
+     * The one place that turns a font choice into a file. Everything that needs a
+     * custom font — the app typeface, the Compose family, the reader stylesheet —
+     * resolves through here.
+     */
+    fun customFontFile(fontChoice: String, context: Context): File? {
+        if (BuiltInFont.forChoice(fontChoice) != null) return null
+        val info = listAvailableFonts(context).find { it.name == fontChoice } ?: return null
+        if (info.path.isBlank()) return null
+        return File(info.path).takeIf { it.exists() }
+    }
+
+    fun loadTypeface(fontChoice: String, context: Context): PlatformTypeface {
+        BuiltInFont.forChoice(fontChoice)?.let { return it.platformTypeface() }
+        val file = customFontFile(fontChoice, context) ?: return PlatformTypeface.DEFAULT
+        return try {
+            PlatformTypeface.createFromFile(file)
+        } catch (_: Exception) {
+            PlatformTypeface.DEFAULT
+        }
+    }
+
+    fun loadFontFamily(fontChoice: String, context: Context): FontFamily {
+        BuiltInFont.forChoice(fontChoice)?.let { return it.fontFamily() }
+        val file = customFontFile(fontChoice, context) ?: return FontFamily.Default
+        return try {
+            FontFamily(PlatformTypeface.createFromFile(file))
+        } catch (_: Exception) {
+            FontFamily.Default
+        }
+    }
+
+    /**
+     * The same choice, expressed for a WebView. An imported font has to travel as
+     * bytes: the WebView cannot open a file inside app-private storage.
+     */
+    fun loadReaderFont(fontChoice: String, context: Context): ReaderFont {
+        BuiltInFont.forChoice(fontChoice)?.let { return ReaderFont.builtIn(it) }
+        val file = customFontFile(fontChoice, context) ?: return ReaderFont.SYSTEM
+        return try {
+            ReaderFont.embedded(file.name, file.readBytes())
+        } catch (_: Exception) {
+            ReaderFont.SYSTEM
+        }
+    }
+
     private fun listFontsIn(dir: File): List<FontInfo> {
         if (!dir.exists() || !dir.isDirectory) return emptyList()
         return dir.listFiles()
-            ?.filter { it.extension.lowercase() in listOf("ttf", "otf") }
+            ?.filter { it.extension.lowercase() in FONT_EXTENSIONS }
             ?.sortedBy { it.nameWithoutExtension.lowercase() }
             ?.map { FontInfo(it.nameWithoutExtension, it.absolutePath) }
             ?: emptyList()
     }
 
-    fun loadTypeface(fontChoice: String, context: Context): PlatformTypeface {
-        return when (fontChoice) {
-            "System", "" -> PlatformTypeface.DEFAULT
-            "Serif" -> PlatformTypeface.SERIF
-            "Monospace" -> PlatformTypeface.MONOSPACE
-            else -> {
-                val fonts = listAvailableFonts(context)
-                val info = fonts.find { it.name == fontChoice } ?: return PlatformTypeface.DEFAULT
-                if (info.path.isBlank()) return PlatformTypeface.DEFAULT
-                try {
-                    PlatformTypeface.createFromFile(info.path)
-                } catch (_: Exception) {
-                    PlatformTypeface.DEFAULT
-                }
-            }
-        }
+    private fun BuiltInFont.platformTypeface(): PlatformTypeface = when (this) {
+        BuiltInFont.SYSTEM -> PlatformTypeface.DEFAULT
+        BuiltInFont.SERIF -> PlatformTypeface.SERIF
+        BuiltInFont.MONOSPACE -> PlatformTypeface.MONOSPACE
     }
 
-    fun loadFontFamily(fontChoice: String, context: Context): FontFamily {
-        return when (fontChoice) {
-            "System", "" -> FontFamily.Default
-            "Serif" -> FontFamily.Serif
-            "Monospace" -> FontFamily.Monospace
-            else -> {
-                val fonts = listAvailableFonts(context)
-                val info = fonts.find { it.name == fontChoice } ?: return FontFamily.Default
-                if (info.path.isBlank()) return FontFamily.Default
-                try {
-                    val typeface = PlatformTypeface.createFromFile(info.path)
-                    FontFamily(typeface)
-                } catch (_: Exception) {
-                    FontFamily.Default
-                }
-            }
-        }
+    private fun BuiltInFont.fontFamily(): FontFamily = when (this) {
+        BuiltInFont.SYSTEM -> FontFamily.Default
+        BuiltInFont.SERIF -> FontFamily.Serif
+        BuiltInFont.MONOSPACE -> FontFamily.Monospace
     }
 }

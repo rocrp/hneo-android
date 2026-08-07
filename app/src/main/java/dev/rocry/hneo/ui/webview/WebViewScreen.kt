@@ -27,6 +27,7 @@ import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.eink.PageArithmetic
 import dev.rocry.hneo.ui.eink.VolumeKeyPaging
+import dev.rocry.hneo.ui.theme.FontManager
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -38,8 +39,8 @@ fun WebViewScreen(
     val context = LocalContext.current
     val appSettings by LocalAppContainer.current.settings.settings
         .collectAsState(initial = AppSettings())
-    val readerFontCss = remember(appSettings.fontChoice) {
-        resolveReaderFontCss(appSettings.fontChoice)
+    val readerFont = remember(appSettings.fontChoice) {
+        FontManager.loadReaderFont(appSettings.fontChoice, context)
     }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -84,7 +85,7 @@ fun WebViewScreen(
                         onClick = {
                             readerMode = !readerMode
                             if (readerMode) {
-                                webView?.evaluateJavascript(readerModeJs(readerFontCss), null)
+                                webView?.evaluateJavascript(Reader.script(readerFont), null)
                             } else {
                                 webView?.reload()
                             }
@@ -95,14 +96,9 @@ fun WebViewScreen(
                     }
                     IconButton(
                         onClick = {
-                            webView?.evaluateJavascript("document.body.innerText") { result ->
-                                val text = result
-                                    ?.removeSurrounding("\"")
-                                    ?.replace("\\n", "\n")
-                                    ?.replace("\\t", "\t")
-                                    ?.replace("\\\"", "\"")
-                                    ?.trim()
-                                if (!text.isNullOrBlank()) {
+                            webView?.evaluateJavascript(PageTextExtractor.SCRIPT) { result ->
+                                val text = PageTextExtractor.decode(result)
+                                if (text.isNotBlank()) {
                                     onSummary(currentTitle, text, currentUrl)
                                 }
                             }
@@ -186,50 +182,4 @@ fun WebViewScreen(
             )
         }
     }
-}
-
-private data class ReaderFontCss(val fontFace: String, val fontFamily: String)
-
-private fun resolveReaderFontCss(fontChoice: String): ReaderFontCss {
-    return when (fontChoice) {
-        "System", "" -> ReaderFontCss("", "system-ui,-apple-system,Roboto,sans-serif")
-        "Serif" -> ReaderFontCss("", "Georgia,serif")
-        "Monospace" -> ReaderFontCss("", "'Courier New',Courier,monospace")
-        else -> ReaderFontCss("", "system-ui,-apple-system,Roboto,sans-serif")
-    }
-}
-
-private fun readerModeJs(fontCss: ReaderFontCss): String {
-    val fontFaceRule = fontCss.fontFace.replace("'", "\\'")
-    val fontFamilyValue = fontCss.fontFamily.replace("'", "\\'")
-    return """
-(function() {
-    var article = document.querySelector('article') ||
-                  document.querySelector('[role="main"]') ||
-                  document.querySelector('main') ||
-                  document.querySelector('.post-content, .article-content, .entry-content, .content');
-    var title = document.title;
-    var content = article ? article.innerHTML : document.body.innerHTML;
-    var temp = document.createElement('div');
-    temp.innerHTML = content;
-    var remove = temp.querySelectorAll('script, style, nav, footer, header, aside, iframe, ' +
-        '.ad, .ads, .sidebar, .comments, .social, .share, .related, .newsletter, .popup, ' +
-        '.modal, .cookie, [role="banner"], [role="navigation"], [role="complementary"]');
-    for (var i = 0; i < remove.length; i++) remove[i].remove();
-    document.head.innerHTML = '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-        '<style>' +
-        '$fontFaceRule' +
-        'body{max-width:680px;margin:0 auto;padding:20px 16px;font-family:$fontFamilyValue;' +
-        'font-size:18px;line-height:1.8;color:#222;background:#fffff8}' +
-        'img{max-width:100%;height:auto;border-radius:4px;margin:12px 0}' +
-        'h1{font-size:24px;line-height:1.3;margin-bottom:16px}' +
-        'a{color:#1a73e8}' +
-        'pre,code{font-size:14px;background:#f5f5f5;padding:2px 6px;border-radius:3px;overflow-x:auto}' +
-        'pre{padding:12px;margin:12px 0}' +
-        'blockquote{border-left:3px solid #ddd;margin:12px 0;padding-left:16px;color:#555}' +
-        'p{margin:0 0 16px}' +
-        '</style>';
-    document.body.innerHTML = '<h1>' + title + '</h1>' + temp.innerHTML;
-})()
-"""
 }
