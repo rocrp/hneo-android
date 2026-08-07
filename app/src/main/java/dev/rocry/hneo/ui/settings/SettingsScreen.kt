@@ -22,7 +22,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.BuildConfig
-import dev.rocry.hneo.data.*
+import dev.rocry.hneo.data.AppSettings
+import dev.rocry.hneo.data.SettingsStore
+import dev.rocry.hneo.data.ThemeMode
 import dev.rocry.hneo.data.update.UpdateState
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.LoadingIndicator
@@ -30,22 +32,36 @@ import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.BuiltInFont
 import dev.rocry.hneo.ui.theme.FontInfo
 import dev.rocry.hneo.ui.theme.FontManager
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.io.File
 
+private val UPDATE_INTERVALS = listOf(
+    6 to "6h",
+    12 to "12h",
+    24 to "1 day",
+    72 to "3 days",
+    168 to "7 days",
+)
+
+private const val MIN_COMMENTS = 10
+private const val MAX_COMMENTS = 500
+
+/**
+ * An ordinary observer of the settings flow, like every other consumer. It holds
+ * no copy of the settings record, so no write can leave the UI showing something
+ * the store disagrees with.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settingsStore = LocalAppContainer.current.settings
+    val settings by settingsStore.settings.collectAsState(initial = null)
 
-    var settings by remember { mutableStateOf(AppSettings()) }
-    var loaded by remember { mutableStateOf(false) }
     var availableFonts by remember { mutableStateOf<List<FontInfo>>(emptyList()) }
+    LaunchedEffect(Unit) { availableFonts = FontManager.listAvailableFonts(context) }
 
-    fun save(transform: (AppSettings) -> AppSettings) {
+    fun update(transform: (AppSettings) -> AppSettings) {
         scope.launch { settingsStore.update(transform) }
     }
 
@@ -55,18 +71,8 @@ fun SettingsScreen(onBack: () -> Unit) {
         uri ?: return@rememberLauncherForActivityResult
         val imported = FontManager.importFont(context, uri) ?: return@rememberLauncherForActivityResult
         availableFonts = FontManager.listAvailableFonts(context)
-        // Auto-select the imported font
-        settings = settings.copy(fontChoice = imported.name)
-        save { it.copy(fontChoice = imported.name) }
+        update { it.copy(fontChoice = imported.name) }
     }
-
-    LaunchedEffect(Unit) {
-        settings = settingsStore.settings.first()
-        loaded = true
-        availableFonts = FontManager.listAvailableFonts(context)
-    }
-
-    if (!loaded) return
 
     Scaffold(
         topBar = {
@@ -80,6 +86,12 @@ fun SettingsScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
+        val current = settings
+        if (current == null) {
+            LoadingIndicator(modifier = Modifier.padding(padding))
+            return@Scaffold
+        }
+
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -88,22 +100,14 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Theme section
-            Text(
-                text = "Theme",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            SettingsSection("Theme")
 
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 ThemeMode.entries.forEachIndexed { index, mode ->
                     SegmentedButton(
                         shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
-                        selected = settings.themeMode == mode,
-                        onClick = {
-                            settings = settings.copy(themeMode = mode)
-                            save { it.copy(themeMode = mode) }
-                        },
+                        selected = current.themeMode == mode,
+                        onClick = { update { it.copy(themeMode = mode) } },
                     ) {
                         Text(mode.label)
                     }
@@ -112,21 +116,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             HorizontalDivider()
 
-            // Font section
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Font",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+            SettingsSection("Font") {
                 FilledTonalButton(
-                    onClick = {
-                        fontPickerLauncher.launch(arrayOf("font/*", "application/octet-stream"))
-                    },
+                    onClick = { fontPickerLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
@@ -136,73 +128,18 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 availableFonts.forEach { font ->
-                    val selected = settings.fontChoice == font.name
-                    val isCustom = font.path.isNotBlank()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (selected) {
-                                    Modifier.border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-                                } else {
-                                    Modifier.border(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outlineVariant,
-                                        RoundedCornerShape(8.dp),
-                                    )
-                                },
-                            )
-                            .einkClickable {
-                                settings = settings.copy(fontChoice = font.name)
-                                save { it.copy(fontChoice = font.name) }
+                    FontRow(
+                        font = font,
+                        selected = current.fontChoice == font.name,
+                        onSelect = { update { it.copy(fontChoice = font.name) } },
+                        onDelete = {
+                            FontManager.deleteFont(context, font)
+                            availableFonts = FontManager.listAvailableFonts(context)
+                            if (current.fontChoice == font.name) {
+                                update { it.copy(fontChoice = BuiltInFont.SYSTEM.displayName) }
                             }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = font.name,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                            if (isCustom) {
-                                Text(
-                                    text = font.path.substringAfterLast("/"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        Row {
-                            if (selected) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            if (isCustom) {
-                                IconButton(
-                                    onClick = {
-                                        FontManager.deleteFont(context, font)
-                                        availableFonts = FontManager.listAvailableFonts(context)
-                                        if (settings.fontChoice == font.name) {
-                                            settings = settings.copy(fontChoice = BuiltInFont.SYSTEM.displayName)
-                                            save { it.copy(fontChoice = BuiltInFont.SYSTEM.displayName) }
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Default.Delete,
-                                        contentDescription = "Delete font",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
+                        },
+                    )
                 }
             }
 
@@ -214,203 +151,98 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             HorizontalDivider()
 
-            // Browser section
-            Text(
-                text = "Browser",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            SettingsSection("Browser")
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .einkClickable {
-                        val newValue = !settings.openLinksInBrowser
-                        settings = settings.copy(openLinksInBrowser = newValue)
-                        save { it.copy(openLinksInBrowser = newValue) }
-                    }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Open links in external browser",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "Use default browser instead of in-app webview",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = settings.openLinksInBrowser,
-                    onCheckedChange = { newValue ->
-                        settings = settings.copy(openLinksInBrowser = newValue)
-                        save { it.copy(openLinksInBrowser = newValue) }
-                    },
-                )
-            }
+            SettingsSwitchRow(
+                title = "Open links in external browser",
+                subtitle = "Use default browser instead of in-app webview",
+                checked = current.openLinksInBrowser,
+                onCheckedChange = { enabled -> update { it.copy(openLinksInBrowser = enabled) } },
+            )
 
             HorizontalDivider()
 
-            // AI section
-            Text(
-                text = "AI Summary",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+            SettingsSection("AI Summary")
+
+            SettingsTextField(
+                value = current.llmApiUrl,
+                label = "API URL",
+                onCommit = { value -> update { it.copy(llmApiUrl = value) } },
             )
 
-            OutlinedTextField(
-                value = settings.llmApiUrl,
-                onValueChange = {
-                    settings = settings.copy(llmApiUrl = it)
-                    save { s -> s.copy(llmApiUrl = it) }
-                },
-                label = { Text("API URL") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+            SettingsTextField(
+                value = current.llmModel,
+                label = "Model",
+                onCommit = { value -> update { it.copy(llmModel = value) } },
             )
 
-            OutlinedTextField(
-                value = settings.llmModel,
-                onValueChange = {
-                    settings = settings.copy(llmModel = it)
-                    save { s -> s.copy(llmModel = it) }
-                },
-                label = { Text("Model") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-            )
-
-            OutlinedTextField(
-                value = settings.llmApiKey,
-                onValueChange = {
-                    settings = settings.copy(llmApiKey = it)
-                    save { s -> s.copy(llmApiKey = it) }
-                },
-                label = { Text("API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+            SettingsTextField(
+                value = current.llmApiKey,
+                label = "API Key",
+                onCommit = { value -> update { it.copy(llmApiKey = value) } },
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             )
 
-            OutlinedTextField(
-                value = settings.llmMaxComments.toString(),
-                onValueChange = { text ->
-                    text.toIntOrNull()?.let { v ->
-                        val clamped = v.coerceIn(10, 500)
-                        settings = settings.copy(llmMaxComments = clamped)
-                        save { it.copy(llmMaxComments = clamped) }
+            SettingsTextField(
+                value = current.llmMaxComments.toString(),
+                label = "Max Comments ($MIN_COMMENTS-$MAX_COMMENTS)",
+                onCommit = { value ->
+                    value.toIntOrNull()?.coerceIn(MIN_COMMENTS, MAX_COMMENTS)?.let { clamped ->
+                        update { it.copy(llmMaxComments = clamped) }
                     }
                 },
-                label = { Text("Max Comments (10-500)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
 
             HorizontalDivider()
 
-            Text(
-                text = "Prompts",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+            SettingsSection("Prompts")
+
+            SettingsTextField(
+                value = current.llmSystemPrompt,
+                label = "System Prompt",
+                onCommit = { value -> update { it.copy(llmSystemPrompt = value) } },
+                singleLine = false,
+                minLines = 3,
             )
 
-            OutlinedTextField(
-                value = settings.llmSystemPrompt,
-                onValueChange = {
-                    settings = settings.copy(llmSystemPrompt = it)
-                    save { s -> s.copy(llmSystemPrompt = it) }
-                },
-                label = { Text("System Prompt") },
-                modifier = Modifier.fillMaxWidth(),
+            SettingsTextField(
+                value = current.llmExplainPrompt,
+                label = "Explain Prompt",
+                onCommit = { value -> update { it.copy(llmExplainPrompt = value) } },
+                singleLine = false,
                 minLines = 3,
-                maxLines = 6,
             )
 
-            OutlinedTextField(
-                value = settings.llmExplainPrompt,
-                onValueChange = {
-                    settings = settings.copy(llmExplainPrompt = it)
-                    save { s -> s.copy(llmExplainPrompt = it) }
-                },
-                label = { Text("Explain Prompt") },
-                modifier = Modifier.fillMaxWidth(),
+            SettingsTextField(
+                value = current.llmWebpageSummaryPrompt,
+                label = "Webpage Summary Prompt",
+                onCommit = { value -> update { it.copy(llmWebpageSummaryPrompt = value) } },
+                singleLine = false,
                 minLines = 3,
-                maxLines = 6,
-            )
-
-            OutlinedTextField(
-                value = settings.llmWebpageSummaryPrompt,
-                onValueChange = {
-                    settings = settings.copy(llmWebpageSummaryPrompt = it)
-                    save { s -> s.copy(llmWebpageSummaryPrompt = it) }
-                },
-                label = { Text("Webpage Summary Prompt") },
-                modifier = Modifier.fillMaxWidth(),
-                minLines = 3,
-                maxLines = 6,
             )
 
             HorizontalDivider()
 
-            // About section
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+            SettingsSection("About")
+
+            SettingsSwitchRow(
+                title = "Auto check for updates",
+                subtitle = "Check on app launch at the chosen interval",
+                checked = current.autoUpdateEnabled,
+                onCheckedChange = { enabled -> update { it.copy(autoUpdateEnabled = enabled) } },
             )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .einkClickable {
-                        val newValue = !settings.autoUpdateEnabled
-                        settings = settings.copy(autoUpdateEnabled = newValue)
-                        save { it.copy(autoUpdateEnabled = newValue) }
-                    }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Auto check for updates",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "Check on app launch at the chosen interval",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = settings.autoUpdateEnabled,
-                    onCheckedChange = { newValue ->
-                        settings = settings.copy(autoUpdateEnabled = newValue)
-                        save { it.copy(autoUpdateEnabled = newValue) }
-                    },
-                )
-            }
-
-            if (settings.autoUpdateEnabled) {
-                val intervalOptions = listOf(6, 12, 24, 72, 168) // hours
-                val intervalLabels = listOf("6h", "12h", "1 day", "3 days", "7 days")
+            if (current.autoUpdateEnabled) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    intervalOptions.forEachIndexed { index, hours ->
+                    UPDATE_INTERVALS.forEachIndexed { index, (hours, label) ->
                         SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index, intervalOptions.size),
-                            selected = settings.updateCheckIntervalHours == hours,
-                            onClick = {
-                                settings = settings.copy(updateCheckIntervalHours = hours)
-                                save { it.copy(updateCheckIntervalHours = hours) }
-                            },
+                            shape = SegmentedButtonDefaults.itemShape(index, UPDATE_INTERVALS.size),
+                            selected = current.updateCheckIntervalHours == hours,
+                            onClick = { update { it.copy(updateCheckIntervalHours = hours) } },
                         ) {
-                            Text(intervalLabels[index], style = MaterialTheme.typography.labelSmall)
+                            Text(label, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -425,6 +257,61 @@ fun SettingsScreen(onBack: () -> Unit) {
             UpdateSection()
 
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun FontRow(
+    font: FontInfo,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val isCustom = font.path.isNotBlank()
+    val borderColor = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outlineVariant
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .einkClickable(onSelect)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = font.name, style = MaterialTheme.typography.bodyLarge)
+            if (isCustom) {
+                Text(
+                    text = font.path.substringAfterLast("/"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Row {
+            if (selected) {
+                Icon(
+                    Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (isCustom) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = "Delete font",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }
