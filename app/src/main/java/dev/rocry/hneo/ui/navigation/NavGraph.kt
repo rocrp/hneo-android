@@ -19,16 +19,11 @@ import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
-import dev.rocry.hneo.ui.explain.ExplainScreen
-import dev.rocry.hneo.ui.explain.ExplainViewModel
+import dev.rocry.hneo.ui.llmdocument.LlmDocumentScreen
+import dev.rocry.hneo.ui.llmdocument.LlmDocumentViewModel
 import dev.rocry.hneo.ui.settings.SettingsScreen
 import dev.rocry.hneo.ui.stories.StoryListScreen
 import dev.rocry.hneo.ui.stories.StoryListViewModel
-import dev.rocry.hneo.ui.summary.SummaryScreen
-import dev.rocry.hneo.ui.summary.SummaryViewModel
-import dev.rocry.hneo.ui.webview.WebSummaryData
-import dev.rocry.hneo.ui.webview.WebSummaryScreen
-import dev.rocry.hneo.ui.webview.WebSummaryViewModel
 import dev.rocry.hneo.ui.webview.WebViewScreen
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -42,7 +37,7 @@ object Routes {
     const val EXPLAIN = "explain/{selectedText}/{storyTitle}"
     const val SETTINGS = "settings"
     const val WEBVIEW = "webview/{url}"
-    const val WEB_SUMMARY = "web_summary"
+    const val PAGE_SUMMARY = "page_summary/{url}/{title}"
 }
 
 private val json = Json { ignoreUnknownKeys = true }
@@ -188,7 +183,7 @@ fun HneoNavGraph() {
                 "UTF-8",
             )
             val story = json.decodeFromString<Story>(storyJson)
-            val summaryViewModel: SummaryViewModel = viewModel(
+            val documentViewModel: LlmDocumentViewModel = viewModel(
                 key = "summary_${story.id}",
                 factory = container.viewModelFactory,
             )
@@ -200,11 +195,11 @@ fun HneoNavGraph() {
             val commentState by commentViewModel.state.collectAsState()
 
             LaunchedEffect(story.id) {
-                summaryViewModel.startSummary(story, commentState.comments)
+                documentViewModel.summarizeStory(story, commentState.comments)
             }
 
-            SummaryScreen(
-                viewModel = summaryViewModel,
+            LlmDocumentScreen(
+                viewModel = documentViewModel,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -224,14 +219,14 @@ fun HneoNavGraph() {
                 backStackEntry.arguments?.getString("storyTitle") ?: "",
                 "UTF-8",
             )
-            val explainViewModel: ExplainViewModel = viewModel(factory = container.viewModelFactory)
+            val documentViewModel: LlmDocumentViewModel = viewModel(factory = container.viewModelFactory)
 
             LaunchedEffect(selectedText) {
-                explainViewModel.explain(selectedText, storyTitle)
+                documentViewModel.explain(selectedText, storyTitle)
             }
 
-            ExplainScreen(
-                viewModel = explainViewModel,
+            LlmDocumentScreen(
+                viewModel = documentViewModel,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -249,25 +244,37 @@ fun HneoNavGraph() {
                 url = url,
                 onClose = { navController.popBackStack() },
                 onSummary = { pageTitle, pageContent, pageUrl ->
-                    WebSummaryData.set(pageTitle, pageContent, pageUrl)
-                    navController.navigate(Routes.WEB_SUMMARY)
+                    container.pageTextCache.put(pageUrl, pageContent)
+                    val encodedUrl = java.net.URLEncoder.encode(pageUrl, "UTF-8")
+                    val encodedTitle = java.net.URLEncoder.encode(pageTitle, "UTF-8")
+                    navController.navigate("page_summary/$encodedUrl/$encodedTitle")
                 },
             )
         }
 
-        composable(Routes.WEB_SUMMARY) {
-            val webSummaryViewModel: WebSummaryViewModel = viewModel(factory = container.viewModelFactory)
+        composable(
+            Routes.PAGE_SUMMARY,
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val pageUrl = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("url") ?: "",
+                "UTF-8",
+            )
+            val pageTitle = java.net.URLDecoder.decode(
+                backStackEntry.arguments?.getString("title") ?: "",
+                "UTF-8",
+            )
+            val documentViewModel: LlmDocumentViewModel = viewModel(factory = container.viewModelFactory)
 
-            LaunchedEffect(Unit) {
-                webSummaryViewModel.startSummary(
-                    WebSummaryData.pageTitle,
-                    WebSummaryData.pageContent,
-                    WebSummaryData.pageUrl,
-                )
+            LaunchedEffect(pageUrl) {
+                documentViewModel.summarizePage(pageTitle, pageUrl)
             }
 
-            WebSummaryScreen(
-                viewModel = webSummaryViewModel,
+            LlmDocumentScreen(
+                viewModel = documentViewModel,
                 onBack = { navController.popBackStack() },
             )
         }

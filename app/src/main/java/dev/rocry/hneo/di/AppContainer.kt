@@ -10,6 +10,7 @@ import dev.rocry.hneo.data.CommentCache
 import dev.rocry.hneo.data.DataStoreSettings
 import dev.rocry.hneo.data.HNClient
 import dev.rocry.hneo.data.OpenGraphService
+import dev.rocry.hneo.data.PageTextCache
 import dev.rocry.hneo.data.PasteService
 import dev.rocry.hneo.data.SettingsStore
 import dev.rocry.hneo.data.StoryCache
@@ -23,10 +24,8 @@ import dev.rocry.hneo.data.llm.LlmClient
 import dev.rocry.hneo.data.llm.OpenAiLlmClient
 import dev.rocry.hneo.data.settingsDataStore
 import dev.rocry.hneo.ui.comments.CommentListViewModel
-import dev.rocry.hneo.ui.explain.ExplainViewModel
+import dev.rocry.hneo.ui.llmdocument.LlmDocumentViewModel
 import dev.rocry.hneo.ui.stories.StoryListViewModel
-import dev.rocry.hneo.ui.summary.SummaryViewModel
-import dev.rocry.hneo.ui.webview.WebSummaryViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.serialization.json.Json
@@ -74,6 +73,7 @@ class AppContainer(
 
     val storyCache = StoryCache(File(appContext.cacheDir, "stories"), json, dispatchers.io)
     val commentCache = CommentCache()
+    val pageTextCache = PageTextCache()
     val summaryCache = SummaryCache(File(appContext.cacheDir, "summaries.json"), json, dispatchers.io)
 
     val updatesDir: File = File(appContext.cacheDir, "updates")
@@ -82,9 +82,7 @@ class AppContainer(
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
         initializer { StoryListViewModel(hnClient, storyCache, commentCache) }
         initializer { CommentListViewModel(hnClient, commentCache) }
-        initializer { SummaryViewModel(llmClient, summaryCache) }
-        initializer { WebSummaryViewModel(llmClient) }
-        initializer { ExplainViewModel(llmClient) }
+        initializer { LlmDocumentViewModel(llmClient, summaryCache, pageTextCache) }
     }
 
     private companion object {
