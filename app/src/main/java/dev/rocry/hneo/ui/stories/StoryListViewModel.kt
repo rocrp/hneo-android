@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.stories
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.rocry.hneo.data.CommentCache
 import dev.rocry.hneo.data.HNClient
@@ -22,9 +21,11 @@ data class StoryListState(
     val canLoadMore: Boolean = true,
 )
 
-class StoryListViewModel(application: Application) : AndroidViewModel(application) {
-    private val storyCache = StoryCache(application)
-    val commentCache = CommentCache()
+class StoryListViewModel(
+    private val hnClient: HNClient,
+    private val storyCache: StoryCache,
+    private val commentCache: CommentCache,
+) : ViewModel() {
 
     private val _state = MutableStateFlow(StoryListState())
     val state = _state.asStateFlow()
@@ -45,13 +46,13 @@ class StoryListViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun loadMore() {
-        val s = _state.value
-        if (s.isLoadingMore || !s.canLoadMore) return
-        _state.value = s.copy(isLoadingMore = true)
+        val snapshot = _state.value
+        if (snapshot.isLoadingMore || !snapshot.canLoadMore) return
+        _state.value = snapshot.copy(isLoadingMore = true)
         viewModelScope.launch {
             try {
-                val nextPage = s.currentPage + 1
-                val more = HNClient.fetchStories(s.currentFeed, nextPage)
+                val nextPage = snapshot.currentPage + 1
+                val more = hnClient.fetchStories(snapshot.currentFeed, nextPage)
                 if (more.isEmpty()) {
                     _state.value = _state.value.copy(isLoadingMore = false, canLoadMore = false)
                 } else {
@@ -61,9 +62,9 @@ class StoryListViewModel(application: Application) : AndroidViewModel(applicatio
                         currentPage = nextPage,
                         isLoadingMore = false,
                     )
-                    storyCache.save(s.currentFeed, combined)
+                    storyCache.save(snapshot.currentFeed, combined)
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _state.value = _state.value.copy(isLoadingMore = false)
             }
         }
@@ -73,11 +74,10 @@ class StoryListViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val toPrefetch = visibleStoryIds
                 .filter { commentCache.get(it) == null }
-                .take(5)
+                .take(PREFETCH_LIMIT)
             for (id in toPrefetch) {
                 try {
-                    val detail = HNClient.fetchStoryDetail(id)
-                    commentCache.put(detail)
+                    commentCache.put(hnClient.fetchStoryDetail(id))
                 } catch (_: Exception) {
                     // prefetch failure is non-critical
                 }
@@ -88,13 +88,12 @@ class StoryListViewModel(application: Application) : AndroidViewModel(applicatio
     private fun loadStories() {
         viewModelScope.launch {
             val feed = _state.value.currentFeed
-            // Show cached first
             val cached = storyCache.load(feed)
             if (cached != null && _state.value.stories.isEmpty()) {
                 _state.value = _state.value.copy(stories = cached, isLoading = true)
             }
             try {
-                val stories = HNClient.fetchStories(feed, 1)
+                val stories = hnClient.fetchStories(feed, 1)
                 _state.value = _state.value.copy(
                     stories = stories,
                     isLoading = false,
@@ -109,5 +108,9 @@ class StoryListViewModel(application: Application) : AndroidViewModel(applicatio
                 )
             }
         }
+    }
+
+    private companion object {
+        const val PREFETCH_LIMIT = 5
     }
 }

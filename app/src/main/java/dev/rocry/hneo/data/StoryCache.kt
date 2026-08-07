@@ -1,20 +1,21 @@
 package dev.rocry.hneo.data
 
-import android.content.Context
 import dev.rocry.hneo.model.FeedKind
 import dev.rocry.hneo.model.Story
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
-class StoryCache(context: Context) {
-    private val cacheDir = File(context.cacheDir, "stories").also { it.mkdirs() }
-    private val json = Json { ignoreUnknownKeys = true }
-
-    suspend fun load(feed: FeedKind): List<Story>? = withContext(Dispatchers.IO) {
-        val file = File(cacheDir, "${feed.name.lowercase()}.json")
+/** Last-seen stories per feed, so a cold start shows something before the network answers. */
+class StoryCache(
+    private val cacheDir: File,
+    private val json: Json,
+    private val ioDispatcher: CoroutineDispatcher,
+) {
+    suspend fun load(feed: FeedKind): List<Story>? = withContext(ioDispatcher) {
+        val file = fileFor(feed)
         if (!file.exists()) return@withContext null
         try {
             json.decodeFromString<List<Story>>(file.readText())
@@ -23,8 +24,10 @@ class StoryCache(context: Context) {
         }
     }
 
-    suspend fun save(feed: FeedKind, stories: List<Story>) = withContext(Dispatchers.IO) {
-        val file = File(cacheDir, "${feed.name.lowercase()}.json")
-        file.writeText(json.encodeToString(stories))
+    suspend fun save(feed: FeedKind, stories: List<Story>) = withContext(ioDispatcher) {
+        cacheDir.mkdirs()
+        fileFor(feed).writeText(json.encodeToString(stories))
     }
+
+    private fun fileFor(feed: FeedKind) = File(cacheDir, "${feed.name.lowercase()}.json")
 }

@@ -1,11 +1,9 @@
 package dev.rocry.hneo.ui.explain
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.LLMClient
-import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.data.SettingsStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +16,10 @@ data class ExplainState(
     val error: String? = null,
 )
 
-class ExplainViewModel(application: Application) : AndroidViewModel(application) {
+class ExplainViewModel(
+    private val llmClient: LLMClient,
+    private val settingsStore: SettingsStore,
+) : ViewModel() {
     private val _state = MutableStateFlow(ExplainState())
     val state = _state.asStateFlow()
 
@@ -29,7 +30,7 @@ class ExplainViewModel(application: Application) : AndroidViewModel(application)
         _state.value = ExplainState(isStreaming = true)
 
         viewModelScope.launch {
-            val settings = settingsFlow(getApplication()).first()
+            val settings = settingsStore.settings.first()
 
             if (settings.llmApiKey.isBlank()) {
                 _state.value = ExplainState(error = "API key not configured. Please set it in Settings.")
@@ -46,7 +47,7 @@ class ExplainViewModel(application: Application) : AndroidViewModel(application)
             streamJob = launch {
                 try {
                     val buffer = StringBuilder()
-                    LLMClient.streamCompletion(
+                    llmClient.streamCompletion(
                         apiUrl = settings.llmApiUrl,
                         model = settings.llmModel,
                         apiKey = settings.llmApiKey,

@@ -6,10 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
-import androidx.compose.ui.text.font.FontFamily
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.ThemeMode
-import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
 import dev.rocry.hneo.ui.components.LocalVolumePageEvents
 import dev.rocry.hneo.ui.navigation.HneoNavGraph
@@ -36,8 +35,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val container = (application as HneoApp).container
+
         setContent {
-            val settings by settingsFlow(this).collectAsState(initial = AppSettings())
+            val settings by container.settings.settings.collectAsState(initial = AppSettings())
             val einkMode = settings.themeMode == ThemeMode.EINK
             isEinkMode = einkMode
             val fontFamily = remember(settings.fontChoice) {
@@ -48,6 +49,7 @@ class MainActivity : ComponentActivity() {
             }
 
             CompositionLocalProvider(
+                LocalAppContainer provides container,
                 LocalVolumePageEvents provides volumePageEvents,
                 LocalSetVolumeKeyIntercept provides { shouldInterceptVolumeKeys = it },
                 LocalTypeface provides typeface,

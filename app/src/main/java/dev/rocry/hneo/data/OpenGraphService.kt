@@ -1,68 +1,57 @@
 package dev.rocry.hneo.data
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import dev.rocry.hneo.data.http.HttpRequest
+import dev.rocry.hneo.data.http.JsonHttp
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 
-object OpenGraphService {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
-
+/** Resolves a page's `og:image` for story thumbnails. Best-effort: failures are cached as "none". */
+class OpenGraphService(private val http: JsonHttp) {
     private val cache = ConcurrentHashMap<String, String>()
     private val failedUrls = ConcurrentHashMap.newKeySet<String>()
-    private val ogPattern = Regex(
-        """<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']""",
-        RegexOption.IGNORE_CASE,
-    )
-    private val ogPatternReverse = Regex(
-        """<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:image["']""",
-        RegexOption.IGNORE_CASE,
-    )
 
     suspend fun fetchOgImage(url: String): String? {
         cache[url]?.let { return it }
         if (url in failedUrls) return null
 
-        return withContext(Dispatchers.IO) {
-            try {
-                val request = Request.Builder().url(url).build()
-                val response = client.newCall(request).execute()
-                val body = response.body?.string()?.take(50_000) ?: run {
-                    failedUrls += url
-                    return@withContext null
-                }
-                val imageUrl = ogPattern.find(body)?.groupValues?.get(1)
-                    ?: ogPatternReverse.find(body)?.groupValues?.get(1)
-                    ?: run {
-                        failedUrls += url
-                        return@withContext null
-                    }
-
-                val resolved = when {
-                    imageUrl.startsWith("http") -> imageUrl
-                    imageUrl.startsWith("//") -> "https:$imageUrl"
-                    imageUrl.startsWith("/") -> {
-                        val base = url.substringBefore("/", url).let {
-                            val scheme = url.substringBefore("://")
-                            val host = url.removePrefix("$scheme://").substringBefore("/")
-                            "$scheme://$host"
-                        }
-                        "$base$imageUrl"
-                    }
-                    else -> imageUrl
-                }
-                cache[url] = resolved
-                resolved
-            } catch (_: Exception) {
-                failedUrls += url
-                null
-            }
+        val body = try {
+            http.text(HttpRequest(url, readTimeoutSeconds = TIMEOUT_SECONDS)).take(MAX_BYTES)
+        } catch (_: Exception) {
+            failedUrls += url
+            return null
         }
+
+        val imageUrl = OG_IMAGE.find(body)?.groupValues?.get(1)
+            ?: OG_IMAGE_REVERSED.find(body)?.groupValues?.get(1)
+            ?: run {
+                failedUrls += url
+                return null
+            }
+
+        return resolveAgainst(pageUrl = url, imageUrl = imageUrl).also { cache[url] = it }
+    }
+
+    private fun resolveAgainst(pageUrl: String, imageUrl: String): String = when {
+        imageUrl.startsWith("http") -> imageUrl
+        imageUrl.startsWith("//") -> "https:$imageUrl"
+        imageUrl.startsWith("/") -> {
+            val scheme = pageUrl.substringBefore("://")
+            val host = pageUrl.removePrefix("$scheme://").substringBefore("/")
+            "$scheme://$host$imageUrl"
+        }
+        else -> imageUrl
+    }
+
+    private companion object {
+        const val TIMEOUT_SECONDS = 5L
+        const val MAX_BYTES = 50_000
+
+        val OG_IMAGE = Regex(
+            """<meta[^>]*property\s*=\s*["']og:image["'][^>]*content\s*=\s*["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE,
+        )
+        val OG_IMAGE_REVERSED = Regex(
+            """<meta[^>]*content\s*=\s*["']([^"']+)["'][^>]*property\s*=\s*["']og:image["']""",
+            RegexOption.IGNORE_CASE,
+        )
     }
 }

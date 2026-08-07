@@ -1,41 +1,38 @@
 package dev.rocry.hneo.data
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
+import dev.rocry.hneo.data.http.HttpBody
+import dev.rocry.hneo.data.http.HttpMethod
+import dev.rocry.hneo.data.http.HttpRequest
+import dev.rocry.hneo.data.http.JsonHttp
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
-object PasteService {
-    private const val PASTE_URL = "https://paste.dzzu.net/api/pastes"
+/** Publishes markdown to a paste host so it can be shared as a link. */
+class PasteService(private val http: JsonHttp) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
-    private val json = Json { ignoreUnknownKeys = true }
-
-    suspend fun createPaste(content: String): String = withContext(Dispatchers.IO) {
-        val body = buildJsonObject {
+    suspend fun createPaste(content: String): String {
+        val payload = buildJsonObject {
             put("content", content)
             put("format", "markdown")
         }.toString()
 
-        val request = Request.Builder()
-            .url(PASTE_URL)
-            .post(body.toRequestBody("application/json".toMediaType()))
-            .build()
+        val result = http.decodeObject(
+            HttpRequest(
+                url = PASTE_URL,
+                method = HttpMethod.POST,
+                body = HttpBody(payload),
+            ),
+        )
 
-        val response = client.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw Exception("Empty response")
-        val result = json.parseToJsonElement(responseBody).jsonObject
+        return result["url"]?.jsonPrimitive?.contentOrNull
+            ?: result["id"]?.jsonPrimitive?.contentOrNull?.let { "$HOST/$it" }
+            ?: throw IllegalStateException("Paste host returned neither a url nor an id")
+    }
 
-        result["url"]?.jsonPrimitive?.contentOrNull
-            ?: result["id"]?.jsonPrimitive?.contentOrNull?.let { "https://paste.dzzu.net/$it" }
-            ?: throw Exception("Failed to create paste")
+    private companion object {
+        const val HOST = "https://paste.dzzu.net"
+        const val PASTE_URL = "$HOST/api/pastes"
     }
 }

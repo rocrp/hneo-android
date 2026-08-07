@@ -21,7 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
-import dev.rocry.hneo.data.PasteService
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.EinkPaginatedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
@@ -36,6 +36,7 @@ fun SummaryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val einkMode = LocalEinkMode.current
+    val pasteService = LocalAppContainer.current.pasteService
 
     Scaffold(
         topBar = {
@@ -75,7 +76,7 @@ fun SummaryScreen(
                         onClick = {
                             scope.launch {
                                 try {
-                                    val url = PasteService.createPaste(viewModel.buildMarkdown())
+                                    val url = pasteService.createPaste(viewModel.buildMarkdown())
                                     val intent = Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
                                         putExtra(Intent.EXTRA_TEXT, url)

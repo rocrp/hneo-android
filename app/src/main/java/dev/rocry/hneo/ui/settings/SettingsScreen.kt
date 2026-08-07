@@ -23,7 +23,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.BuildConfig
 import dev.rocry.hneo.data.*
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.einkClickable
+import dev.rocry.hneo.ui.theme.BuiltInFont
 import dev.rocry.hneo.ui.theme.FontInfo
 import dev.rocry.hneo.ui.theme.FontManager
 import kotlinx.coroutines.flow.first
@@ -35,10 +37,15 @@ import java.io.File
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val settingsStore = LocalAppContainer.current.settings
 
     var settings by remember { mutableStateOf(AppSettings()) }
     var loaded by remember { mutableStateOf(false) }
     var availableFonts by remember { mutableStateOf<List<FontInfo>>(emptyList()) }
+
+    fun save(transform: (AppSettings) -> AppSettings) {
+        scope.launch { settingsStore.update(transform) }
+    }
 
     val fontPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -48,24 +55,16 @@ fun SettingsScreen(onBack: () -> Unit) {
         availableFonts = FontManager.listAvailableFonts(context)
         // Auto-select the imported font
         settings = settings.copy(fontChoice = imported.name)
-        scope.launch { updateSetting(context, SettingsKeys.FONT_CHOICE, imported.name) }
+        save { it.copy(fontChoice = imported.name) }
     }
 
     LaunchedEffect(Unit) {
-        settings = settingsFlow(context).first()
+        settings = settingsStore.settings.first()
         loaded = true
         availableFonts = FontManager.listAvailableFonts(context)
     }
 
     if (!loaded) return
-
-    fun save(key: androidx.datastore.preferences.core.Preferences.Key<String>, value: String) {
-        scope.launch { updateSetting(context, key, value) }
-    }
-
-    fun saveInt(key: androidx.datastore.preferences.core.Preferences.Key<Int>, value: Int) {
-        scope.launch { updateSetting(context, key, value) }
-    }
 
     Scaffold(
         topBar = {
@@ -101,7 +100,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = settings.themeMode == mode,
                         onClick = {
                             settings = settings.copy(themeMode = mode)
-                            save(SettingsKeys.THEME_MODE, mode.name)
+                            save { it.copy(themeMode = mode) }
                         },
                     ) {
                         Text(mode.label)
@@ -153,7 +152,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             )
                             .einkClickable {
                                 settings = settings.copy(fontChoice = font.name)
-                                save(SettingsKeys.FONT_CHOICE, font.name)
+                                save { it.copy(fontChoice = font.name) }
                             }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -186,8 +185,8 @@ fun SettingsScreen(onBack: () -> Unit) {
                                         FontManager.deleteFont(context, font)
                                         availableFonts = FontManager.listAvailableFonts(context)
                                         if (settings.fontChoice == font.name) {
-                                            settings = settings.copy(fontChoice = "System")
-                                            save(SettingsKeys.FONT_CHOICE, "System")
+                                            settings = settings.copy(fontChoice = BuiltInFont.SYSTEM.displayName)
+                                            save { it.copy(fontChoice = BuiltInFont.SYSTEM.displayName) }
                                         }
                                     },
                                     modifier = Modifier.size(32.dp),
@@ -226,7 +225,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .einkClickable {
                         val newValue = !settings.openLinksInBrowser
                         settings = settings.copy(openLinksInBrowser = newValue)
-                        scope.launch { updateSetting(context, SettingsKeys.OPEN_LINKS_IN_BROWSER, newValue) }
+                        save { it.copy(openLinksInBrowser = newValue) }
                     }
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -247,7 +246,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     checked = settings.openLinksInBrowser,
                     onCheckedChange = { newValue ->
                         settings = settings.copy(openLinksInBrowser = newValue)
-                        scope.launch { updateSetting(context, SettingsKeys.OPEN_LINKS_IN_BROWSER, newValue) }
+                        save { it.copy(openLinksInBrowser = newValue) }
                     },
                 )
             }
@@ -265,7 +264,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmApiUrl,
                 onValueChange = {
                     settings = settings.copy(llmApiUrl = it)
-                    save(SettingsKeys.LLM_API_URL, it)
+                    save { s -> s.copy(llmApiUrl = it) }
                 },
                 label = { Text("API URL") },
                 modifier = Modifier.fillMaxWidth(),
@@ -276,7 +275,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmModel,
                 onValueChange = {
                     settings = settings.copy(llmModel = it)
-                    save(SettingsKeys.LLM_MODEL, it)
+                    save { s -> s.copy(llmModel = it) }
                 },
                 label = { Text("Model") },
                 modifier = Modifier.fillMaxWidth(),
@@ -287,7 +286,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmApiKey,
                 onValueChange = {
                     settings = settings.copy(llmApiKey = it)
-                    save(SettingsKeys.LLM_API_KEY, it)
+                    save { s -> s.copy(llmApiKey = it) }
                 },
                 label = { Text("API Key") },
                 modifier = Modifier.fillMaxWidth(),
@@ -302,7 +301,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     text.toIntOrNull()?.let { v ->
                         val clamped = v.coerceIn(10, 500)
                         settings = settings.copy(llmMaxComments = clamped)
-                        saveInt(SettingsKeys.LLM_MAX_COMMENTS, clamped)
+                        save { it.copy(llmMaxComments = clamped) }
                     }
                 },
                 label = { Text("Max Comments (10-500)") },
@@ -323,7 +322,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmSystemPrompt,
                 onValueChange = {
                     settings = settings.copy(llmSystemPrompt = it)
-                    save(SettingsKeys.LLM_SYSTEM_PROMPT, it)
+                    save { s -> s.copy(llmSystemPrompt = it) }
                 },
                 label = { Text("System Prompt") },
                 modifier = Modifier.fillMaxWidth(),
@@ -335,7 +334,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmExplainPrompt,
                 onValueChange = {
                     settings = settings.copy(llmExplainPrompt = it)
-                    save(SettingsKeys.LLM_EXPLAIN_PROMPT, it)
+                    save { s -> s.copy(llmExplainPrompt = it) }
                 },
                 label = { Text("Explain Prompt") },
                 modifier = Modifier.fillMaxWidth(),
@@ -347,7 +346,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 value = settings.llmWebpageSummaryPrompt,
                 onValueChange = {
                     settings = settings.copy(llmWebpageSummaryPrompt = it)
-                    save(SettingsKeys.LLM_WEBPAGE_SUMMARY_PROMPT, it)
+                    save { s -> s.copy(llmWebpageSummaryPrompt = it) }
                 },
                 label = { Text("Webpage Summary Prompt") },
                 modifier = Modifier.fillMaxWidth(),
@@ -370,7 +369,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     .einkClickable {
                         val newValue = !settings.autoUpdateEnabled
                         settings = settings.copy(autoUpdateEnabled = newValue)
-                        scope.launch { updateSetting(context, SettingsKeys.AUTO_UPDATE_ENABLED, newValue) }
+                        save { it.copy(autoUpdateEnabled = newValue) }
                     }
                     .padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -391,7 +390,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     checked = settings.autoUpdateEnabled,
                     onCheckedChange = { newValue ->
                         settings = settings.copy(autoUpdateEnabled = newValue)
-                        scope.launch { updateSetting(context, SettingsKeys.AUTO_UPDATE_ENABLED, newValue) }
+                        save { it.copy(autoUpdateEnabled = newValue) }
                     },
                 )
             }
@@ -406,7 +405,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             selected = settings.updateCheckIntervalHours == hours,
                             onClick = {
                                 settings = settings.copy(updateCheckIntervalHours = hours)
-                                saveInt(SettingsKeys.UPDATE_CHECK_INTERVAL_HOURS, hours)
+                                save { it.copy(updateCheckIntervalHours = hours) }
                             },
                         ) {
                             Text(intervalLabels[index], style = MaterialTheme.typography.labelSmall)
@@ -432,7 +431,7 @@ private sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
     data object NoUpdate : UpdateState
-    data class Available(val release: UpdateService.ReleaseInfo) : UpdateState
+    data class Available(val release: ReleaseInfo) : UpdateState
     data class Downloading(val progress: Float) : UpdateState
     data class Error(val message: String) : UpdateState
 }
@@ -441,6 +440,7 @@ private sealed interface UpdateState {
 private fun UpdateSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val container = LocalAppContainer.current
     var state by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     var showDialog by remember { mutableStateOf(false) }
 
@@ -451,7 +451,8 @@ private fun UpdateSection() {
                     state = UpdateState.Checking
                     scope.launch {
                         state = try {
-                            val release = UpdateService.checkForUpdate(BuildConfig.VERSION_CODE)
+                            val release = container.updateService.fetchLatestRelease()
+                                .takeIf { it.buildNumber > BuildConfig.VERSION_CODE }
                             if (release != null) {
                                 showDialog = true
                                 UpdateState.Available(release)
@@ -537,13 +538,15 @@ private fun UpdateSection() {
                     state = UpdateState.Downloading(0f)
                     scope.launch {
                         try {
-                            val file = UpdateService.downloadApk(
-                                context = context,
+                            val file = container.updateService.downloadApk(
                                 url = release.downloadUrl,
-                                fileName = "hneo-${release.versionName}.apk",
+                                destination = File(
+                                    container.updatesDir,
+                                    "hneo-${release.versionName}.apk",
+                                ),
                                 onProgress = { state = UpdateState.Downloading(it) },
                             )
-                            UpdateService.installApk(context, file)
+                            container.updateService.installApk(context, file)
                             state = UpdateState.Idle
                         } catch (e: Exception) {
                             state = UpdateState.Error("Download failed: ${e.message}")

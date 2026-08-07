@@ -10,7 +10,10 @@ VERSION_NAME := 0.1.$(BUILD_NUMBER)
 APK_NAME := hneo-$(VERSION_NAME).apk
 APK_DIR := app/build/outputs/apk/release
 
-.PHONY: build debug clean install beta
+.PHONY: build debug clean install beta test
+
+test:
+	./gradlew testDebugUnitTest
 
 build:
 	./gradlew assembleRelease

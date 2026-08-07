@@ -1,11 +1,10 @@
 package dev.rocry.hneo.ui.webview
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.LLMClient
-import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.data.SettingsStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +18,10 @@ data class WebSummaryState(
     val error: String? = null,
 )
 
-class WebSummaryViewModel(application: Application) : AndroidViewModel(application) {
+class WebSummaryViewModel(
+    private val llmClient: LLMClient,
+    private val settingsStore: SettingsStore,
+) : ViewModel() {
     private val _state = MutableStateFlow(WebSummaryState())
     val state = _state.asStateFlow()
 
@@ -34,7 +36,7 @@ class WebSummaryViewModel(application: Application) : AndroidViewModel(applicati
         pageUrl = url
 
         viewModelScope.launch {
-            val settings = settingsFlow(getApplication()).first()
+            val settings = settingsStore.settings.first()
 
             if (settings.llmApiKey.isBlank()) {
                 _state.value = WebSummaryState(error = "API key not configured. Please set it in Settings.")
@@ -47,7 +49,7 @@ class WebSummaryViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refresh() {
         viewModelScope.launch {
-            val settings = settingsFlow(getApplication()).first()
+            val settings = settingsStore.settings.first()
             streamSummary(settings)
         }
     }
@@ -69,7 +71,7 @@ class WebSummaryViewModel(application: Application) : AndroidViewModel(applicati
         streamJob = viewModelScope.launch {
             try {
                 val buffer = StringBuilder()
-                LLMClient.streamCompletion(
+                llmClient.streamCompletion(
                     apiUrl = settings.llmApiUrl,
                     model = settings.llmModel,
                     apiKey = settings.llmApiKey,

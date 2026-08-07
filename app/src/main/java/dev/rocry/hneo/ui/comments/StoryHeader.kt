@@ -14,10 +14,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import dev.rocry.hneo.data.OpenGraphService
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.theme.LocalEinkMode
-import kotlinx.coroutines.launch
 
 @Composable
 fun StoryHeader(
@@ -27,15 +26,11 @@ fun StoryHeader(
 ) {
     val einkMode = LocalEinkMode.current
     var thumbnailUrl by remember(story.url) { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    val openGraphService = LocalAppContainer.current.openGraphService
 
     if (!einkMode) {
         LaunchedEffect(story.url) {
-            story.url?.let { url ->
-                scope.launch {
-                    thumbnailUrl = OpenGraphService.fetchOgImage(url)
-                }
-            }
+            story.url?.let { url -> thumbnailUrl = openGraphService.fetchOgImage(url) }
         }
     }
 

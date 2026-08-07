@@ -1,23 +1,31 @@
 package dev.rocry.hneo.data
 
-import android.content.Context
 import kotlinx.coroutines.flow.first
 
-object UpdateChecker {
-    suspend fun checkIfNeeded(context: Context, currentVersionCode: Int): UpdateService.ReleaseInfo? {
-        val settings = settingsFlow(context).first()
-        if (!settings.autoUpdateEnabled) return null
+/** Decides whether the launch-time update check is due, and remembers that it ran. */
+class UpdateChecker(
+    private val settings: SettingsStore,
+    private val updateService: UpdateService,
+    private val currentVersionCode: Int,
+) {
+    suspend fun checkIfNeeded(): ReleaseInfo? {
+        val current = settings.settings.first()
+        if (!current.autoUpdateEnabled) return null
 
-        val intervalMs = settings.updateCheckIntervalHours * 60 * 60 * 1000L
+        val intervalMs = current.updateCheckIntervalHours * MILLIS_PER_HOUR
         val now = System.currentTimeMillis()
-        if (now - settings.lastUpdateCheck < intervalMs) return null
+        if (now - current.lastUpdateCheck < intervalMs) return null
 
-        updateSetting(context, SettingsKeys.LAST_UPDATE_CHECK, now)
+        settings.update { it.copy(lastUpdateCheck = now) }
 
         return try {
-            UpdateService.checkForUpdate(currentVersionCode)
+            updateService.fetchLatestRelease().takeIf { it.buildNumber > currentVersionCode }
         } catch (_: Exception) {
             null
         }
+    }
+
+    private companion object {
+        const val MILLIS_PER_HOUR = 60 * 60 * 1000L
     }
 }

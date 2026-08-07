@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.rocry.hneo.data.AppSettings
-import dev.rocry.hneo.data.settingsFlow
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
 import dev.rocry.hneo.ui.components.LocalVolumePageEvents
 
@@ -36,7 +36,8 @@ fun WebViewScreen(
     onSummary: (pageTitle: String, pageContent: String, pageUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
-    val appSettings by settingsFlow(context).collectAsState(initial = AppSettings())
+    val appSettings by LocalAppContainer.current.settings.settings
+        .collectAsState(initial = AppSettings())
     val readerFontCss = remember(appSettings.fontChoice) {
         resolveReaderFontCss(appSettings.fontChoice)
     }

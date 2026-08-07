@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.summary
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.rocry.hneo.data.*
 import dev.rocry.hneo.model.FlatComment
@@ -22,25 +21,24 @@ data class SummaryState(
     val error: String? = null,
 )
 
-class SummaryViewModel(application: Application) : AndroidViewModel(application) {
+class SummaryViewModel(
+    private val llmClient: LLMClient,
+    private val summaryCache: SummaryCache,
+    private val settingsStore: SettingsStore,
+) : ViewModel() {
     private val _state = MutableStateFlow(SummaryState())
     val state = _state.asStateFlow()
 
-    private val summaryCache = SummaryCache(application)
     private var streamJob: Job? = null
     private var currentStory: Story? = null
     private var currentComments: List<FlatComment> = emptyList()
-
-    init {
-        viewModelScope.launch { summaryCache.load() }
-    }
 
     fun startSummary(story: Story, comments: List<FlatComment>) {
         currentStory = story
         currentComments = comments
 
         viewModelScope.launch {
-            val settings = settingsFlow(getApplication()).first()
+            val settings = settingsStore.settings.first()
 
             if (settings.llmApiKey.isBlank()) {
                 _state.value = SummaryState(error = "API key not configured. Please set it in Settings.")
@@ -65,7 +63,7 @@ class SummaryViewModel(application: Application) : AndroidViewModel(application)
     fun refresh() {
         val story = currentStory ?: return
         viewModelScope.launch {
-            val settings = settingsFlow(getApplication()).first()
+            val settings = settingsStore.settings.first()
             streamSummary(story, currentComments, settings)
         }
     }
@@ -110,7 +108,7 @@ class SummaryViewModel(application: Application) : AndroidViewModel(application)
         streamJob = viewModelScope.launch {
             try {
                 val buffer = StringBuilder()
-                LLMClient.streamCompletion(
+                llmClient.streamCompletion(
                     apiUrl = settings.llmApiUrl,
                     model = settings.llmModel,
                     apiKey = settings.llmApiKey,

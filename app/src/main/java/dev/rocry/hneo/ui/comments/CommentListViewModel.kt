@@ -1,7 +1,6 @@
 package dev.rocry.hneo.ui.comments
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.rocry.hneo.data.CommentCache
 import dev.rocry.hneo.data.HNClient
@@ -22,20 +21,20 @@ data class CommentListState(
     val error: String? = null,
 )
 
-class CommentListViewModel(application: Application) : AndroidViewModel(application) {
+class CommentListViewModel(
+    private val hnClient: HNClient,
+    private val commentCache: CommentCache,
+) : ViewModel() {
+
     private val _state = MutableStateFlow(CommentListState())
     val state = _state.asStateFlow()
 
-    private var commentCache: CommentCache? = null
     private var allComments: List<FlatComment> = emptyList()
 
-    fun init(story: Story, cache: CommentCache) {
-        commentCache = cache
+    fun init(story: Story) {
         _state.value = CommentListState(story = story, isLoading = true)
 
-        // Check cache first
-        val cached = cache.get(story.id)
-        if (cached != null) {
+        commentCache.get(story.id)?.let { cached ->
             allComments = flattenComments(cached.comments)
             _state.value = _state.value.copy(
                 storyDetail = cached,
@@ -49,10 +48,10 @@ class CommentListViewModel(application: Application) : AndroidViewModel(applicat
 
     fun toggleCollapse(commentId: Int) {
         val current = _state.value.collapsedIds
-        val newCollapsed = if (commentId in current) current - commentId else current + commentId
+        val collapsed = if (commentId in current) current - commentId else current + commentId
         _state.value = _state.value.copy(
-            collapsedIds = newCollapsed,
-            comments = filterCollapsed(allComments, newCollapsed),
+            collapsedIds = collapsed,
+            comments = filterCollapsed(allComments, collapsed),
         )
     }
 
@@ -60,14 +59,11 @@ class CommentListViewModel(application: Application) : AndroidViewModel(applicat
         val result = mutableListOf<FlatComment>()
         var skipDepth = Int.MAX_VALUE
 
-        for (c in comments) {
-            if (c.depth > skipDepth) continue
+        for (comment in comments) {
+            if (comment.depth > skipDepth) continue
             skipDepth = Int.MAX_VALUE
-
-            if (c.id in collapsed) {
-                skipDepth = c.depth
-            }
-            result += c
+            if (comment.id in collapsed) skipDepth = comment.depth
+            result += comment
         }
         return result
     }
@@ -75,8 +71,8 @@ class CommentListViewModel(application: Application) : AndroidViewModel(applicat
     private fun loadComments(storyId: Int) {
         viewModelScope.launch {
             try {
-                val detail = HNClient.fetchStoryDetail(storyId)
-                commentCache?.put(detail)
+                val detail = hnClient.fetchStoryDetail(storyId)
+                commentCache.put(detail)
                 allComments = flattenComments(detail.comments)
                 _state.value = _state.value.copy(
                     storyDetail = detail,
@@ -85,11 +81,10 @@ class CommentListViewModel(application: Application) : AndroidViewModel(applicat
                     error = null,
                 )
             } catch (e: Exception) {
-                if (_state.value.comments.isEmpty()) {
-                    _state.value = _state.value.copy(isLoading = false, error = e.message)
-                } else {
-                    _state.value = _state.value.copy(isLoading = false)
-                }
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    error = if (_state.value.comments.isEmpty()) e.message else null,
+                )
             }
         }
     }

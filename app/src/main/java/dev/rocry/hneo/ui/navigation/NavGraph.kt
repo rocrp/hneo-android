@@ -13,8 +13,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import dev.rocry.hneo.BuildConfig
-import dev.rocry.hneo.data.*
+import dev.rocry.hneo.data.AppSettings
+import dev.rocry.hneo.data.ReleaseInfo
+import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
@@ -32,6 +33,7 @@ import dev.rocry.hneo.ui.webview.WebViewScreen
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 
 object Routes {
     const val STORIES = "stories"
@@ -48,16 +50,17 @@ private val json = Json { ignoreUnknownKeys = true }
 @Composable
 fun HneoNavGraph() {
     val navController = rememberNavController()
-    val storyListViewModel: StoryListViewModel = viewModel()
+    val container = LocalAppContainer.current
+    val storyListViewModel: StoryListViewModel = viewModel(factory = container.viewModelFactory)
     val context = LocalContext.current
-    val settings by settingsFlow(context).collectAsState(initial = AppSettings())
+    val settings by container.settings.settings.collectAsState(initial = AppSettings())
     val scope = rememberCoroutineScope()
 
-    var autoUpdateRelease by remember { mutableStateOf<UpdateService.ReleaseInfo?>(null) }
+    var autoUpdateRelease by remember { mutableStateOf<ReleaseInfo?>(null) }
     var autoUpdateDownloadProgress by remember { mutableStateOf<Float?>(null) }
 
     LaunchedEffect(Unit) {
-        autoUpdateRelease = UpdateChecker.checkIfNeeded(context, BuildConfig.VERSION_CODE)
+        autoUpdateRelease = container.updateChecker.checkIfNeeded()
     }
 
     autoUpdateRelease?.let { release ->
@@ -91,13 +94,15 @@ fun HneoNavGraph() {
                         autoUpdateDownloadProgress = 0f
                         scope.launch {
                             try {
-                                val file = UpdateService.downloadApk(
-                                    context = context,
+                                val file = container.updateService.downloadApk(
                                     url = release.downloadUrl,
-                                    fileName = "hneo-${release.versionName}.apk",
+                                    destination = File(
+                                        container.updatesDir,
+                                        "hneo-${release.versionName}.apk",
+                                    ),
                                     onProgress = { autoUpdateDownloadProgress = it },
                                 )
-                                UpdateService.installApk(context, file)
+                                container.updateService.installApk(context, file)
                                 autoUpdateRelease = null
                                 autoUpdateDownloadProgress = null
                             } catch (_: Exception) {
@@ -143,10 +148,11 @@ fun HneoNavGraph() {
             val story = json.decodeFromString<Story>(storyJson)
             val commentViewModel: CommentListViewModel = viewModel(
                 key = "comments_${story.id}",
+                factory = container.viewModelFactory,
             )
 
             LaunchedEffect(story.id) {
-                commentViewModel.init(story, storyListViewModel.commentCache)
+                commentViewModel.init(story)
             }
 
             CommentListScreen(
@@ -184,10 +190,12 @@ fun HneoNavGraph() {
             val story = json.decodeFromString<Story>(storyJson)
             val summaryViewModel: SummaryViewModel = viewModel(
                 key = "summary_${story.id}",
+                factory = container.viewModelFactory,
             )
 
             val commentViewModel: CommentListViewModel = viewModel(
                 key = "comments_${story.id}",
+                factory = container.viewModelFactory,
             )
             val commentState by commentViewModel.state.collectAsState()
 
@@ -216,7 +224,7 @@ fun HneoNavGraph() {
                 backStackEntry.arguments?.getString("storyTitle") ?: "",
                 "UTF-8",
             )
-            val explainViewModel: ExplainViewModel = viewModel()
+            val explainViewModel: ExplainViewModel = viewModel(factory = container.viewModelFactory)
 
             LaunchedEffect(selectedText) {
                 explainViewModel.explain(selectedText, storyTitle)
@@ -248,7 +256,7 @@ fun HneoNavGraph() {
         }
 
         composable(Routes.WEB_SUMMARY) {
-            val webSummaryViewModel: WebSummaryViewModel = viewModel()
+            val webSummaryViewModel: WebSummaryViewModel = viewModel(factory = container.viewModelFactory)
 
             LaunchedEffect(Unit) {
                 webSummaryViewModel.startSummary(
