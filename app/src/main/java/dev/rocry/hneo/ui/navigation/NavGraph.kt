@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -16,7 +18,6 @@ import androidx.navigation.navArgument
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.ReleaseInfo
 import dev.rocry.hneo.di.LocalAppContainer
-import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.comments.CommentListScreen
 import dev.rocry.hneo.ui.comments.CommentListViewModel
 import dev.rocry.hneo.ui.llmdocument.LlmDocumentScreen
@@ -26,21 +27,7 @@ import dev.rocry.hneo.ui.stories.StoryListScreen
 import dev.rocry.hneo.ui.stories.StoryListViewModel
 import dev.rocry.hneo.ui.webview.WebViewScreen
 import kotlinx.coroutines.launch
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
-
-object Routes {
-    const val STORIES = "stories"
-    const val COMMENTS = "comments/{storyJson}"
-    const val SUMMARY = "summary/{storyJson}"
-    const val EXPLAIN = "explain/{selectedText}/{storyTitle}"
-    const val SETTINGS = "settings"
-    const val WEBVIEW = "webview/{url}"
-    const val PAGE_SUMMARY = "page_summary/{url}/{title}"
-}
-
-private val json = Json { ignoreUnknownKeys = true }
 
 @Composable
 fun HneoNavGraph() {
@@ -59,16 +46,17 @@ fun HneoNavGraph() {
     }
 
     autoUpdateRelease?.let { release ->
-        if (autoUpdateDownloadProgress != null) {
+        val progress = autoUpdateDownloadProgress
+        if (progress != null) {
             AlertDialog(
                 onDismissRequest = {},
                 title = { Text("Downloading ${release.versionName}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("${(autoUpdateDownloadProgress!! * 100).toInt()}%")
+                        Text("${(progress * 100).toInt()}%")
                         LinearProgressIndicator(
-                            progress = { autoUpdateDownloadProgress!! },
-                            modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 },
@@ -98,9 +86,9 @@ fun HneoNavGraph() {
                                     onProgress = { autoUpdateDownloadProgress = it },
                                 )
                                 container.updateService.installApk(context, file)
-                                autoUpdateRelease = null
-                                autoUpdateDownloadProgress = null
                             } catch (_: Exception) {
+                                // Nothing the user can do here; the manual check reports properly.
+                            } finally {
                                 autoUpdateRelease = null
                                 autoUpdateDownloadProgress = null
                             }
@@ -118,85 +106,57 @@ fun HneoNavGraph() {
         }
     }
 
+    fun openUrl(url: String) {
+        if (settings.openLinksInBrowser) {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } else {
+            navController.navigate(Routes.webView(url))
+        }
+    }
+
     NavHost(navController = navController, startDestination = Routes.STORIES) {
         composable(Routes.STORIES) {
             StoryListScreen(
                 viewModel = storyListViewModel,
-                onStoryClick = { story ->
-                    val encoded = java.net.URLEncoder.encode(json.encodeToString(story), "UTF-8")
-                    navController.navigate("comments/$encoded")
-                },
-                onSettingsClick = {
-                    navController.navigate(Routes.SETTINGS)
-                },
+                onStoryClick = { story -> navController.navigate(Routes.comments(story.id)) },
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
             )
         }
 
         composable(
             Routes.COMMENTS,
-            arguments = listOf(navArgument("storyJson") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val storyJson = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("storyJson") ?: "",
-                "UTF-8",
-            )
-            val story = json.decodeFromString<Story>(storyJson)
+            arguments = listOf(navArgument(Routes.ARG_STORY_ID) { type = NavType.IntType }),
+        ) { entry ->
+            val storyId = entry.intArg(Routes.ARG_STORY_ID)
             val commentViewModel: CommentListViewModel = viewModel(
-                key = "comments_${story.id}",
+                key = "comments_$storyId",
                 factory = container.viewModelFactory,
             )
 
-            LaunchedEffect(story.id) {
-                commentViewModel.init(story)
-            }
+            LaunchedEffect(storyId) { commentViewModel.load(storyId) }
 
             CommentListScreen(
-                story = story,
                 viewModel = commentViewModel,
                 onBack = { navController.popBackStack() },
-                onSummaryClick = {
-                    val encoded = java.net.URLEncoder.encode(json.encodeToString(story), "UTF-8")
-                    navController.navigate("summary/$encoded")
-                },
-                onOpenUrl = { url ->
-                    if (settings.openLinksInBrowser) {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    } else {
-                        val encoded = java.net.URLEncoder.encode(url, "UTF-8")
-                        navController.navigate("webview/$encoded")
-                    }
-                },
-                onExplain = { selectedText ->
-                    val encodedText = java.net.URLEncoder.encode(selectedText, "UTF-8")
-                    val encodedTitle = java.net.URLEncoder.encode(story.title, "UTF-8")
-                    navController.navigate("explain/$encodedText/$encodedTitle")
+                onSummaryClick = { navController.navigate(Routes.summary(storyId)) },
+                onOpenUrl = ::openUrl,
+                onExplain = { selectedText, storyTitle ->
+                    navController.navigate(Routes.explain(selectedText, storyTitle))
                 },
             )
         }
 
         composable(
             Routes.SUMMARY,
-            arguments = listOf(navArgument("storyJson") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val storyJson = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("storyJson") ?: "",
-                "UTF-8",
-            )
-            val story = json.decodeFromString<Story>(storyJson)
+            arguments = listOf(navArgument(Routes.ARG_STORY_ID) { type = NavType.IntType }),
+        ) { entry ->
+            val storyId = entry.intArg(Routes.ARG_STORY_ID)
             val documentViewModel: LlmDocumentViewModel = viewModel(
-                key = "summary_${story.id}",
+                key = "summary_$storyId",
                 factory = container.viewModelFactory,
             )
 
-            val commentViewModel: CommentListViewModel = viewModel(
-                key = "comments_${story.id}",
-                factory = container.viewModelFactory,
-            )
-            val commentState by commentViewModel.state.collectAsState()
-
-            LaunchedEffect(story.id) {
-                documentViewModel.summarizeStory(story, commentState.comments)
-            }
+            LaunchedEffect(storyId) { documentViewModel.summarizeStory(storyId) }
 
             LlmDocumentScreen(
                 viewModel = documentViewModel,
@@ -207,23 +167,15 @@ fun HneoNavGraph() {
         composable(
             Routes.EXPLAIN,
             arguments = listOf(
-                navArgument("selectedText") { type = NavType.StringType },
-                navArgument("storyTitle") { type = NavType.StringType },
+                navArgument(Routes.ARG_SELECTED_TEXT) { type = NavType.StringType },
+                navArgument(Routes.ARG_STORY_TITLE) { type = NavType.StringType },
             ),
-        ) { backStackEntry ->
-            val selectedText = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("selectedText") ?: "",
-                "UTF-8",
-            )
-            val storyTitle = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("storyTitle") ?: "",
-                "UTF-8",
-            )
+        ) { entry ->
+            val selectedText = entry.stringArg(Routes.ARG_SELECTED_TEXT)
+            val storyTitle = entry.stringArg(Routes.ARG_STORY_TITLE)
             val documentViewModel: LlmDocumentViewModel = viewModel(factory = container.viewModelFactory)
 
-            LaunchedEffect(selectedText) {
-                documentViewModel.explain(selectedText, storyTitle)
-            }
+            LaunchedEffect(selectedText) { documentViewModel.explain(selectedText, storyTitle) }
 
             LlmDocumentScreen(
                 viewModel = documentViewModel,
@@ -233,21 +185,14 @@ fun HneoNavGraph() {
 
         composable(
             Routes.WEBVIEW,
-            arguments = listOf(navArgument("url") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val url = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("url") ?: "",
-                "UTF-8",
-            )
-
+            arguments = listOf(navArgument(Routes.ARG_URL) { type = NavType.StringType }),
+        ) { entry ->
             WebViewScreen(
-                url = url,
+                url = entry.stringArg(Routes.ARG_URL),
                 onClose = { navController.popBackStack() },
                 onSummary = { pageTitle, pageContent, pageUrl ->
                     container.pageTextCache.put(pageUrl, pageContent)
-                    val encodedUrl = java.net.URLEncoder.encode(pageUrl, "UTF-8")
-                    val encodedTitle = java.net.URLEncoder.encode(pageTitle, "UTF-8")
-                    navController.navigate("page_summary/$encodedUrl/$encodedTitle")
+                    navController.navigate(Routes.pageSummary(pageUrl, pageTitle))
                 },
             )
         }
@@ -255,23 +200,15 @@ fun HneoNavGraph() {
         composable(
             Routes.PAGE_SUMMARY,
             arguments = listOf(
-                navArgument("url") { type = NavType.StringType },
-                navArgument("title") { type = NavType.StringType },
+                navArgument(Routes.ARG_URL) { type = NavType.StringType },
+                navArgument(Routes.ARG_TITLE) { type = NavType.StringType },
             ),
-        ) { backStackEntry ->
-            val pageUrl = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("url") ?: "",
-                "UTF-8",
-            )
-            val pageTitle = java.net.URLDecoder.decode(
-                backStackEntry.arguments?.getString("title") ?: "",
-                "UTF-8",
-            )
+        ) { entry ->
+            val pageUrl = entry.stringArg(Routes.ARG_URL)
+            val pageTitle = entry.stringArg(Routes.ARG_TITLE)
             val documentViewModel: LlmDocumentViewModel = viewModel(factory = container.viewModelFactory)
 
-            LaunchedEffect(pageUrl) {
-                documentViewModel.summarizePage(pageTitle, pageUrl)
-            }
+            LaunchedEffect(pageUrl) { documentViewModel.summarizePage(pageTitle, pageUrl) }
 
             LlmDocumentScreen(
                 viewModel = documentViewModel,
@@ -284,3 +221,9 @@ fun HneoNavGraph() {
         }
     }
 }
+
+private fun NavBackStackEntry.intArg(name: String): Int =
+    checkNotNull(arguments?.getInt(name)) { "route argument '$name' is missing" }
+
+private fun NavBackStackEntry.stringArg(name: String): String =
+    arguments?.getString(name).orEmpty()

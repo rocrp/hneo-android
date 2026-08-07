@@ -30,3 +30,15 @@ data class StoryDetail(
     val content: String? = null,
     val comments: List<CommentNode> = emptyList(),
 )
+
+fun StoryDetail.toStory(): Story = Story(
+    id = id,
+    title = title,
+    url = url,
+    points = points,
+    user = user,
+    time = time,
+    commentsCount = commentsCount,
+    domain = domain,
+    timeAgo = timeAgo,
+)

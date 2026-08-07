@@ -2,48 +2,65 @@ package dev.rocry.hneo.ui.comments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.rocry.hneo.data.CommentCache
-import dev.rocry.hneo.data.HNClient
+import dev.rocry.hneo.data.StoryRepository
 import dev.rocry.hneo.model.FlatComment
 import dev.rocry.hneo.model.Story
-import dev.rocry.hneo.model.StoryDetail
 import dev.rocry.hneo.model.flattenComments
+import dev.rocry.hneo.model.toStory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class CommentListState(
     val story: Story? = null,
-    val storyDetail: StoryDetail? = null,
     val comments: List<FlatComment> = emptyList(),
     val collapsedIds: Set<Int> = emptySet(),
     val isLoading: Boolean = true,
     val error: String? = null,
 )
 
-class CommentListViewModel(
-    private val hnClient: HNClient,
-    private val commentCache: CommentCache,
-) : ViewModel() {
+class CommentListViewModel(private val repository: StoryRepository) : ViewModel() {
 
     private val _state = MutableStateFlow(CommentListState())
     val state = _state.asStateFlow()
 
     private var allComments: List<FlatComment> = emptyList()
+    private var storyId: Int? = null
 
-    fun init(story: Story) {
-        _state.value = CommentListState(story = story, isLoading = true)
+    fun load(storyId: Int) {
+        if (this.storyId == storyId) return
+        this.storyId = storyId
 
-        commentCache.get(story.id)?.let { cached ->
-            allComments = flattenComments(cached.comments)
-            _state.value = _state.value.copy(
-                storyDetail = cached,
-                comments = allComments,
-                isLoading = false,
-            )
+        val cached = repository.cachedDetail(storyId)
+        allComments = cached?.let { flattenComments(it.comments) }.orEmpty()
+        _state.value = CommentListState(
+            story = cached?.toStory() ?: repository.knownStory(storyId),
+            comments = allComments,
+            isLoading = cached == null,
+        )
+
+        refresh()
+    }
+
+    fun refresh() {
+        val id = storyId ?: return
+        viewModelScope.launch {
+            try {
+                val detail = repository.fetchDetail(id)
+                allComments = flattenComments(detail.comments)
+                _state.value = _state.value.copy(
+                    story = detail.toStory(),
+                    comments = filterCollapsed(allComments, _state.value.collapsedIds),
+                    isLoading = false,
+                    error = null,
+                )
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(
+                    isLoading = false,
+                    error = if (_state.value.comments.isEmpty()) e.message else null,
+                )
+            }
         }
-
-        loadComments(story.id)
     }
 
     fun toggleCollapse(commentId: Int) {
@@ -66,26 +83,5 @@ class CommentListViewModel(
             result += comment
         }
         return result
-    }
-
-    private fun loadComments(storyId: Int) {
-        viewModelScope.launch {
-            try {
-                val detail = hnClient.fetchStoryDetail(storyId)
-                commentCache.put(detail)
-                allComments = flattenComments(detail.comments)
-                _state.value = _state.value.copy(
-                    storyDetail = detail,
-                    comments = filterCollapsed(allComments, _state.value.collapsedIds),
-                    isLoading = false,
-                    error = null,
-                )
-            } catch (e: Exception) {
-                _state.value = _state.value.copy(
-                    isLoading = false,
-                    error = if (_state.value.comments.isEmpty()) e.message else null,
-                )
-            }
-        }
     }
 }

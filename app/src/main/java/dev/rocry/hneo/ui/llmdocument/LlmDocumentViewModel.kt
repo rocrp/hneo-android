@@ -4,12 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.rocry.hneo.data.CachedSummary
 import dev.rocry.hneo.data.PageTextCache
+import dev.rocry.hneo.data.StoryRepository
 import dev.rocry.hneo.data.SummaryCache
 import dev.rocry.hneo.data.llm.LlmClient
 import dev.rocry.hneo.data.llm.LlmEvent
 import dev.rocry.hneo.data.llm.LlmRequest
-import dev.rocry.hneo.model.FlatComment
-import dev.rocry.hneo.model.Story
+import dev.rocry.hneo.model.flattenComments
+import dev.rocry.hneo.model.toStory
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +44,7 @@ data class LlmDocumentState(
  */
 class LlmDocumentViewModel(
     private val llmClient: LlmClient,
+    private val storyRepository: StoryRepository,
     private val summaryCache: SummaryCache,
     private val pageTextCache: PageTextCache,
 ) : ViewModel() {
@@ -53,8 +55,26 @@ class LlmDocumentViewModel(
     private var streamJob: Job? = null
     private var request: LlmRequest? = null
 
-    fun summarizeStory(story: Story, comments: List<FlatComment>) =
-        start(LlmRequest.SummarizeStory(story, comments))
+    /**
+     * Pulls the story and its comment tree from the repository — the same cached
+     * detail the comments screen is showing. Reading it here rather than being
+     * handed it by the navigation layer is what stops summaries being generated
+     * from zero comments.
+     */
+    fun summarizeStory(storyId: Int) {
+        viewModelScope.launch {
+            val detail = try {
+                storyRepository.detail(storyId)
+            } catch (e: Exception) {
+                _state.value = LlmDocumentState(
+                    kind = LlmDocumentKind.STORY_SUMMARY,
+                    error = e.message ?: "Could not load the discussion",
+                )
+                return@launch
+            }
+            start(LlmRequest.SummarizeStory(detail.toStory(), flattenComments(detail.comments)))
+        }
+    }
 
     fun explain(selectedText: String, storyTitle: String) =
         start(LlmRequest.Explain(selectedText, storyTitle))

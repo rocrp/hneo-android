@@ -15,23 +15,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.components.EinkPaginatedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommentListScreen(
-    story: Story,
     viewModel: CommentListViewModel,
     onBack: () -> Unit,
     onSummaryClick: () -> Unit,
     onOpenUrl: (String) -> Unit = {},
-    onExplain: (String) -> Unit = {},
+    onExplain: (selectedText: String, storyTitle: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val einkMode = LocalEinkMode.current
+    val story = state.story
 
     Scaffold(
         topBar = {
@@ -46,20 +45,22 @@ fun CommentListScreen(
                     IconButton(onClick = onSummaryClick) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = "AI Summary")
                     }
-                    story.url?.let { url ->
+                    story?.url?.let { url ->
                         IconButton(onClick = { onOpenUrl(url) }) {
                             Icon(Icons.Default.OpenInBrowser, contentDescription = "Open in Browser")
                         }
                     }
-                    IconButton(onClick = {
-                        val shareUrl = story.url ?: "https://news.ycombinator.com/item?id=${story.id}"
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "${story.title}\n$shareUrl")
+                    if (story != null) {
+                        IconButton(onClick = {
+                            val shareUrl = story.url ?: "https://news.ycombinator.com/item?id=${story.id}"
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "${story.title}\n$shareUrl")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share"))
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
                         }
-                        context.startActivity(Intent.createChooser(intent, "Share"))
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share")
                     }
                 },
             )
@@ -89,11 +90,13 @@ fun CommentListScreen(
                     modifier = Modifier.fillMaxSize(),
                     totalItemCount = state.comments.size + 1, // +1 for header
                 ) {
-                    item(key = "header") {
-                        StoryHeader(
-                            story = story,
-                            onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
-                        )
+                    if (story != null) {
+                        item(key = "header") {
+                            StoryHeader(
+                                story = story,
+                                onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
+                            )
+                        }
                     }
                     items(
                         items = state.comments,
@@ -103,7 +106,7 @@ fun CommentListScreen(
                             comment = comment,
                             isCollapsed = comment.id in state.collapsedIds,
                             onClick = { viewModel.toggleCollapse(comment.id) },
-                            onExplain = { text -> onExplain(text) },
+                            onExplain = { text -> onExplain(text, story?.title.orEmpty()) },
                         )
                     }
                     if (state.comments.isEmpty() && !state.isLoading) {
@@ -120,11 +123,13 @@ fun CommentListScreen(
             } else {
                 // Normal: scrollable list
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    item(key = "header") {
-                        StoryHeader(
-                            story = story,
-                            onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
-                        )
+                    if (story != null) {
+                        item(key = "header") {
+                            StoryHeader(
+                                story = story,
+                                onTitleClick = story.url?.let { url -> { onOpenUrl(url) } },
+                            )
+                        }
                     }
 
                     items(
@@ -135,7 +140,7 @@ fun CommentListScreen(
                             comment = comment,
                             isCollapsed = comment.id in state.collapsedIds,
                             onClick = { viewModel.toggleCollapse(comment.id) },
-                            onExplain = { text -> onExplain(text) },
+                            onExplain = { text -> onExplain(text, story?.title.orEmpty()) },
                         )
                     }
 

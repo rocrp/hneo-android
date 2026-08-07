@@ -14,6 +14,7 @@ import dev.rocry.hneo.data.PageTextCache
 import dev.rocry.hneo.data.PasteService
 import dev.rocry.hneo.data.SettingsStore
 import dev.rocry.hneo.data.StoryCache
+import dev.rocry.hneo.data.StoryRepository
 import dev.rocry.hneo.data.SummaryCache
 import dev.rocry.hneo.data.UpdateChecker
 import dev.rocry.hneo.data.UpdateService
@@ -71,8 +72,10 @@ class AppContainer(
     val pasteService = PasteService(jsonHttp)
     val updateService = UpdateService(jsonHttp, httpEngine, dispatchers.io)
 
-    val storyCache = StoryCache(File(appContext.cacheDir, "stories"), json, dispatchers.io)
-    val commentCache = CommentCache()
+    private val storyCache = StoryCache(File(appContext.cacheDir, "stories"), json, dispatchers.io)
+    private val commentCache = CommentCache()
+
+    val storyRepository = StoryRepository(hnClient, storyCache, commentCache)
     val pageTextCache = PageTextCache()
     val summaryCache = SummaryCache(File(appContext.cacheDir, "summaries.json"), json, dispatchers.io)
 
@@ -80,9 +83,9 @@ class AppContainer(
     val updateChecker = UpdateChecker(settings, updateService, BuildConfig.VERSION_CODE)
 
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
-        initializer { StoryListViewModel(hnClient, storyCache, commentCache) }
-        initializer { CommentListViewModel(hnClient, commentCache) }
-        initializer { LlmDocumentViewModel(llmClient, summaryCache, pageTextCache) }
+        initializer { StoryListViewModel(storyRepository) }
+        initializer { CommentListViewModel(storyRepository) }
+        initializer { LlmDocumentViewModel(llmClient, storyRepository, summaryCache, pageTextCache) }
     }
 
     private companion object {

@@ -2,8 +2,12 @@ package dev.rocry.hneo.data
 
 import dev.rocry.hneo.model.StoryDetail
 
-class CommentCache(private val maxSize: Int = 20) {
-    private val cache = LinkedHashMap<Int, StoryDetail>(maxSize, 0.75f, true)
+/** Recently-read story detail, least-recently-used first out. */
+class CommentCache(private val maxSize: Int = DEFAULT_MAX_SIZE) {
+    private val cache = object : LinkedHashMap<Int, StoryDetail>(maxSize, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, StoryDetail>?): Boolean =
+            size > maxSize
+    }
 
     @Synchronized
     fun get(id: Int): StoryDetail? = cache[id]
@@ -11,17 +15,9 @@ class CommentCache(private val maxSize: Int = 20) {
     @Synchronized
     fun put(detail: StoryDetail) {
         cache[detail.id] = detail
-        while (cache.size > maxSize) {
-            val oldest = cache.keys.first()
-            cache.remove(oldest)
-        }
     }
 
-    @Synchronized
-    fun evictFarFrom(visibleIds: Set<Int>) {
-        if (cache.size <= maxSize / 2) return
-        val toRemove = cache.keys.filter { it !in visibleIds }
-        val removeCount = (cache.size - maxSize / 2).coerceAtMost(toRemove.size)
-        toRemove.take(removeCount).forEach { cache.remove(it) }
+    private companion object {
+        const val DEFAULT_MAX_SIZE = 20
     }
 }
