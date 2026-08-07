@@ -2,16 +2,20 @@ package dev.rocry.hneo.ui.summary
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.rocry.hneo.data.*
+import dev.rocry.hneo.data.CachedSummary
+import dev.rocry.hneo.data.SummaryCache
+import dev.rocry.hneo.data.llm.LlmClient
+import dev.rocry.hneo.data.llm.LlmEvent
+import dev.rocry.hneo.data.llm.LlmRequest
 import dev.rocry.hneo.model.FlatComment
 import dev.rocry.hneo.model.Story
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
 data class SummaryState(
     val text: String = "",
@@ -22,9 +26,8 @@ data class SummaryState(
 )
 
 class SummaryViewModel(
-    private val llmClient: LLMClient,
+    private val llmClient: LlmClient,
     private val summaryCache: SummaryCache,
-    private val settingsStore: SettingsStore,
 ) : ViewModel() {
     private val _state = MutableStateFlow(SummaryState())
     val state = _state.asStateFlow()
@@ -38,34 +41,19 @@ class SummaryViewModel(
         currentComments = comments
 
         viewModelScope.launch {
-            val settings = settingsStore.settings.first()
-
-            if (settings.llmApiKey.isBlank()) {
-                _state.value = SummaryState(error = "API key not configured. Please set it in Settings.")
-                return@launch
-            }
-
-            // Check cache
-            val cached = summaryCache.get(story.id, story.commentsCount, settings.llmModel)
+            val model = llmClient.currentModel()
+            val cached = summaryCache.get(story.id, story.commentsCount, model)
             if (cached != null) {
-                _state.value = SummaryState(
-                    text = cached.text,
-                    isCached = true,
-                    model = cached.model,
-                )
+                _state.value = SummaryState(text = cached.text, isCached = true, model = cached.model)
                 return@launch
             }
-
-            streamSummary(story, comments, settings)
+            streamSummary(story, comments)
         }
     }
 
     fun refresh() {
         val story = currentStory ?: return
-        viewModelScope.launch {
-            val settings = settingsStore.settings.first()
-            streamSummary(story, currentComments, settings)
-        }
+        streamSummary(story, currentComments)
     }
 
     fun buildMarkdown(): String {
@@ -87,47 +75,30 @@ class SummaryViewModel(
         }
     }
 
-    private fun streamSummary(story: Story, comments: List<FlatComment>, settings: AppSettings) {
+    private fun streamSummary(story: Story, comments: List<FlatComment>) {
         streamJob?.cancel()
-        _state.value = SummaryState(isStreaming = true, model = settings.llmModel)
-
-        val maxComments = settings.llmMaxComments
-        val truncated = comments.take(maxComments)
-
-        val userPrompt = buildString {
-            appendLine("[Story] ${story.title}")
-            story.url?.let { appendLine("[URL] $it") }
-            appendLine("[Score] ${story.points ?: 0} | [Comments] ${story.commentsCount}")
-            appendLine()
-            for (c in truncated) {
-                val indent = "  ".repeat(c.depth)
-                appendLine("$indent[${c.user}] ${c.text}")
-            }
-        }
+        _state.value = SummaryState(isStreaming = true)
 
         streamJob = viewModelScope.launch {
             try {
                 val buffer = StringBuilder()
-                llmClient.streamCompletion(
-                    apiUrl = settings.llmApiUrl,
-                    model = settings.llmModel,
-                    apiKey = settings.llmApiKey,
-                    systemPrompt = settings.llmSystemPrompt,
-                    userPrompt = userPrompt,
-                ).collect { chunk ->
-                    buffer.append(chunk)
-                    _state.value = _state.value.copy(text = buffer.toString())
+                llmClient.stream(LlmRequest.SummarizeStory(story, comments)).collect { event ->
+                    when (event) {
+                        is LlmEvent.Started -> _state.value = _state.value.copy(model = event.model)
+                        is LlmEvent.Chunk -> {
+                            buffer.append(event.text)
+                            _state.value = _state.value.copy(text = buffer.toString())
+                        }
+                    }
                 }
-
                 _state.value = _state.value.copy(isStreaming = false)
 
-                // Cache the result
                 summaryCache.put(
                     story.id,
                     CachedSummary(
                         text = buffer.toString(),
                         commentsCount = story.commentsCount,
-                        model = settings.llmModel,
+                        model = _state.value.model,
                     ),
                 )
             } catch (e: Exception) {

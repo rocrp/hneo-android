@@ -2,13 +2,12 @@ package dev.rocry.hneo.ui.webview
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.rocry.hneo.data.AppSettings
-import dev.rocry.hneo.data.LLMClient
-import dev.rocry.hneo.data.SettingsStore
+import dev.rocry.hneo.data.llm.LlmClient
+import dev.rocry.hneo.data.llm.LlmEvent
+import dev.rocry.hneo.data.llm.LlmRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class WebSummaryState(
@@ -18,70 +17,37 @@ data class WebSummaryState(
     val error: String? = null,
 )
 
-class WebSummaryViewModel(
-    private val llmClient: LLMClient,
-    private val settingsStore: SettingsStore,
-) : ViewModel() {
+class WebSummaryViewModel(private val llmClient: LlmClient) : ViewModel() {
     private val _state = MutableStateFlow(WebSummaryState())
     val state = _state.asStateFlow()
 
     private var streamJob: Job? = null
-    private var pageTitle = ""
-    private var pageContent = ""
-    private var pageUrl = ""
+    private var request: LlmRequest.SummarizePage? = null
 
     fun startSummary(title: String, content: String, url: String) {
-        pageTitle = title
-        pageContent = content
-        pageUrl = url
-
-        viewModelScope.launch {
-            val settings = settingsStore.settings.first()
-
-            if (settings.llmApiKey.isBlank()) {
-                _state.value = WebSummaryState(error = "API key not configured. Please set it in Settings.")
-                return@launch
-            }
-
-            streamSummary(settings)
-        }
+        request = LlmRequest.SummarizePage(title = title, url = url, content = content)
+        streamSummary()
     }
 
-    fun refresh() {
-        viewModelScope.launch {
-            val settings = settingsStore.settings.first()
-            streamSummary(settings)
-        }
-    }
+    fun refresh() = streamSummary()
 
-    private fun streamSummary(settings: AppSettings) {
+    private fun streamSummary() {
+        val pageRequest = request ?: return
         streamJob?.cancel()
-        _state.value = WebSummaryState(isStreaming = true, model = settings.llmModel)
-
-        val truncated = pageContent.take(12_000)
-        val userPrompt = buildString {
-            appendLine("# $pageTitle")
-            if (pageUrl.isNotBlank()) appendLine("URL: $pageUrl")
-            appendLine()
-            appendLine("## Page Content")
-            appendLine()
-            append(truncated)
-        }
+        _state.value = WebSummaryState(isStreaming = true)
 
         streamJob = viewModelScope.launch {
             try {
                 val buffer = StringBuilder()
-                llmClient.streamCompletion(
-                    apiUrl = settings.llmApiUrl,
-                    model = settings.llmModel,
-                    apiKey = settings.llmApiKey,
-                    systemPrompt = settings.llmWebpageSummaryPrompt,
-                    userPrompt = userPrompt,
-                ).collect { chunk ->
-                    buffer.append(chunk)
-                    _state.value = _state.value.copy(text = buffer.toString())
+                llmClient.stream(pageRequest).collect { event ->
+                    when (event) {
+                        is LlmEvent.Started -> _state.value = _state.value.copy(model = event.model)
+                        is LlmEvent.Chunk -> {
+                            buffer.append(event.text)
+                            _state.value = _state.value.copy(text = buffer.toString())
+                        }
+                    }
                 }
-
                 _state.value = _state.value.copy(isStreaming = false)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(

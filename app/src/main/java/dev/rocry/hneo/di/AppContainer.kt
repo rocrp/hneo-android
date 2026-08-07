@@ -9,7 +9,6 @@ import dev.rocry.hneo.BuildConfig
 import dev.rocry.hneo.data.CommentCache
 import dev.rocry.hneo.data.DataStoreSettings
 import dev.rocry.hneo.data.HNClient
-import dev.rocry.hneo.data.LLMClient
 import dev.rocry.hneo.data.OpenGraphService
 import dev.rocry.hneo.data.PasteService
 import dev.rocry.hneo.data.SettingsStore
@@ -20,6 +19,8 @@ import dev.rocry.hneo.data.UpdateService
 import dev.rocry.hneo.data.http.HttpEngine
 import dev.rocry.hneo.data.http.JsonHttp
 import dev.rocry.hneo.data.http.OkHttpEngine
+import dev.rocry.hneo.data.llm.LlmClient
+import dev.rocry.hneo.data.llm.OpenAiLlmClient
 import dev.rocry.hneo.data.settingsDataStore
 import dev.rocry.hneo.ui.comments.CommentListViewModel
 import dev.rocry.hneo.ui.explain.ExplainViewModel
@@ -66,7 +67,7 @@ class AppContainer(
     val settings: SettingsStore = DataStoreSettings(appContext.settingsDataStore)
 
     val hnClient = HNClient(jsonHttp)
-    val llmClient = LLMClient(okHttpClient, json)
+    val llmClient: LlmClient = OpenAiLlmClient(httpEngine, json, settings, dispatchers.io)
     val openGraphService = OpenGraphService(jsonHttp)
     val pasteService = PasteService(jsonHttp)
     val updateService = UpdateService(jsonHttp, httpEngine, dispatchers.io)
@@ -81,9 +82,9 @@ class AppContainer(
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {
         initializer { StoryListViewModel(hnClient, storyCache, commentCache) }
         initializer { CommentListViewModel(hnClient, commentCache) }
-        initializer { SummaryViewModel(llmClient, summaryCache, settings) }
-        initializer { WebSummaryViewModel(llmClient, settings) }
-        initializer { ExplainViewModel(llmClient, settings) }
+        initializer { SummaryViewModel(llmClient, summaryCache) }
+        initializer { WebSummaryViewModel(llmClient) }
+        initializer { ExplainViewModel(llmClient) }
     }
 
     private companion object {
