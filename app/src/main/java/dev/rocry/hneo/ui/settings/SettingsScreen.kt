@@ -54,15 +54,17 @@ private const val MAX_COMMENTS = 500
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val settingsStore = LocalAppContainer.current.settings
+    val container = LocalAppContainer.current
+    val settingsStore = container.settings
     val settings by settingsStore.settings.collectAsState(initial = null)
 
     var availableFonts by remember { mutableStateOf<List<FontInfo>>(emptyList()) }
     LaunchedEffect(Unit) { availableFonts = FontManager.listAvailableFonts(context) }
 
+    // Written on the application scope: a save must not be cancelled by the user
+    // navigating away the moment they finish typing.
     fun update(transform: (AppSettings) -> AppSettings) {
-        scope.launch { settingsStore.update(transform) }
+        container.applicationScope.launch { settingsStore.update(transform) }
     }
 
     val fontPickerLauncher = rememberLauncherForActivityResult(

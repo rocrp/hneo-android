@@ -36,8 +36,6 @@ interface HttpResponse : Closeable {
 
 val HttpResponse.isSuccessful: Boolean get() = code in 200..299
 
-fun HttpResponse.readText(): String = use { bodyStream().bufferedReader().readText() }
-
 /**
  * The one way this app talks HTTP. Implementations own connection pooling and
  * threading; everything above them is transport-agnostic and therefore testable.

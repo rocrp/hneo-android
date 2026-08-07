@@ -36,7 +36,7 @@ class OkHttpEngineTest {
         )
 
         assertEquals(200, response.code)
-        assertEquals("hello", response.readText())
+        assertEquals("hello", response.use { it.bodyStream().bufferedReader().readText() })
         val recorded = server.takeRequest()
         assertEquals("/thing", recorded.path)
         assertEquals("text/plain", recorded.getHeader("Accept"))
@@ -52,7 +52,7 @@ class OkHttpEngineTest {
                 method = HttpMethod.POST,
                 body = HttpBody("""{"a":1}"""),
             ),
-        ).readText()
+        ).use { it.bodyStream().bufferedReader().readText() }
 
         val recorded = server.takeRequest()
         assertEquals("POST", recorded.method)
@@ -67,7 +67,7 @@ class OkHttpEngineTest {
         val response = engine.execute(HttpRequest(server.url("/limited").toString()))
 
         assertEquals(429, response.code)
-        assertEquals("slow down", response.readText())
+        assertEquals("slow down", response.use { it.bodyStream().bufferedReader().readText() })
     }
 
     @Test

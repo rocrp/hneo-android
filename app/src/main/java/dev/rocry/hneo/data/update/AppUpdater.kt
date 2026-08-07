@@ -1,6 +1,7 @@
 package dev.rocry.hneo.data.update
 
 import dev.rocry.hneo.data.SettingsStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,10 +84,6 @@ class AppUpdater(
         }
     }
 
-    fun reset() {
-        _state.value = UpdateState.Idle
-    }
-
     fun download(release: ReleaseInfo) {
         downloadJob?.cancel()
         _state.value = UpdateState.Downloading(release, 0f)
@@ -100,6 +97,8 @@ class AppUpdater(
                 )
                 installer.install(file)
                 _state.value = UpdateState.Idle
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.value = UpdateState.Failed(e.readableMessage())
             }
@@ -121,8 +120,7 @@ class AppUpdater(
         }
     }
 
-    private fun Exception.readableMessage(): String =
-        (this as? UpdateFailure)?.message ?: message ?: "Update failed"
+    private fun Exception.readableMessage(): String = message ?: "Update failed"
 
     private companion object {
         const val MILLIS_PER_HOUR = 60 * 60 * 1000L

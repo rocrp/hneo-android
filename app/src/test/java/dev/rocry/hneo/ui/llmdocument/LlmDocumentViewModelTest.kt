@@ -257,6 +257,33 @@ class LlmDocumentViewModelTest {
     }
 
     @Test
+    fun `retry works when the story itself could not be loaded`() = runTest {
+        engine.respond(code = 503, body = "upstream down")
+        val vm = viewModel()
+        vm.summarizeStory(storyId)
+        assertTrue(vm.state.value.error != null)
+
+        engine.respond(body = storyWithComments)
+        vm.refresh()
+
+        assertEquals("an answer", vm.state.value.text)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
+    fun `retry works when the page text was missing and has since arrived`() = runTest {
+        val vm = viewModel()
+        vm.summarizePage("A Page", "https://late.example")
+        assertTrue(vm.state.value.error != null)
+
+        pageTextCache.put("https://late.example", "the body")
+        vm.refresh()
+
+        assertEquals("an answer", vm.state.value.text)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
     fun `copy of a story summary carries frontmatter, other documents carry plain text`() = runTest {
         engine.respond(body = storyWithComments)
         val summary = viewModel().also { it.summarizeStory(storyId) }

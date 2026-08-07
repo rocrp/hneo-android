@@ -81,8 +81,8 @@ class AppContainer(
     val pageTextCache = PageTextCache()
     val summaryCache = SummaryCache(File(appContext.cacheDir, "summaries.json"), json, dispatchers.io)
 
-    /** Downloads outlive the screen that started them. */
-    private val applicationScope = CoroutineScope(SupervisorJob() + dispatchers.default)
+    /** For work that must outlive the screen that started it: downloads, saved settings. */
+    val applicationScope = CoroutineScope(SupervisorJob() + dispatchers.default)
 
     val appUpdater = AppUpdater(
         updateService = updateService,

@@ -1,8 +1,6 @@
 package dev.rocry.hneo.ui.eink
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -18,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import dev.rocry.hneo.ui.components.einkClickable
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -196,12 +195,7 @@ private fun PageButton(text: String, enabled: Boolean, onClick: () -> Unit) {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.3f),
         modifier = Modifier
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
+            .then(if (enabled) Modifier.einkClickable(onClick) else Modifier)
             .padding(horizontal = 12.dp, vertical = 4.dp),
     )
 }

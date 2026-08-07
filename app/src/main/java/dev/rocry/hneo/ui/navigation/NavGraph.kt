@@ -153,8 +153,12 @@ fun HneoNavGraph() {
     }
 }
 
-private fun NavBackStackEntry.intArg(name: String): Int =
-    checkNotNull(arguments?.getInt(name)) { "route argument '$name' is missing" }
+// getInt() cannot report absence — it returns 0 — so ask whether the key is there.
+private fun NavBackStackEntry.intArg(name: String): Int {
+    val arguments = checkNotNull(arguments) { "destination has no arguments" }
+    check(arguments.containsKey(name)) { "route argument '$name' is missing" }
+    return arguments.getInt(name)
+}
 
 private fun NavBackStackEntry.stringArg(name: String): String =
-    arguments?.getString(name).orEmpty()
+    checkNotNull(arguments?.getString(name)) { "route argument '$name' is missing" }

@@ -10,6 +10,7 @@ import okhttp3.Response
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,13 +31,21 @@ class OkHttpEngine(
         }
     }
 
+    /**
+     * Timeout variants share the one client's connection pool and dispatcher.
+     * Cached, because building a variant per request throws that sharing away.
+     */
+    private val timeoutVariants = ConcurrentHashMap<Long, OkHttpClient>()
+
     private fun clientFor(request: HttpRequest): OkHttpClient =
         if (request.readTimeoutSeconds == HttpRequest.DEFAULT_READ_TIMEOUT_SECONDS) {
             client
         } else {
-            client.newBuilder()
-                .readTimeout(request.readTimeoutSeconds, TimeUnit.SECONDS)
-                .build()
+            timeoutVariants.getOrPut(request.readTimeoutSeconds) {
+                client.newBuilder()
+                    .readTimeout(request.readTimeoutSeconds, TimeUnit.SECONDS)
+                    .build()
+            }
         }
 
     private fun HttpRequest.toOkHttp(): Request {

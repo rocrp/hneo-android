@@ -11,10 +11,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,16 +103,32 @@ fun SettingsTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
     var draft by remember { mutableStateOf(value) }
+    var committed by remember { mutableStateOf(value) }
 
-    // A change from elsewhere (an import, a reset) wins over an untouched draft.
+    // Only a change from elsewhere (an import, a reset) overwrites the draft.
+    // Comparing against what we last committed — rather than against the current
+    // value — keeps the echo of our own write from undoing keystrokes typed
+    // while it was in flight.
     LaunchedEffect(value) {
-        if (value != draft) draft = value
+        if (value != committed) {
+            committed = value
+            draft = value
+        }
     }
 
     LaunchedEffect(draft) {
-        if (draft == value) return@LaunchedEffect
+        if (draft == committed) return@LaunchedEffect
         delay(COMMIT_DELAY_MS)
+        committed = draft
         onCommit(draft)
+    }
+
+    // Leaving the screen mid-edit is not a reason to lose the edit.
+    val pendingDraft by rememberUpdatedState(draft)
+    val lastCommitted by rememberUpdatedState(committed)
+    val commit by rememberUpdatedState(onCommit)
+    DisposableEffect(Unit) {
+        onDispose { if (pendingDraft != lastCommitted) commit(pendingDraft) }
     }
 
     OutlinedTextField(

@@ -11,6 +11,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.data.update.AppUpdater
@@ -23,6 +26,10 @@ import dev.rocry.hneo.data.update.UpdateState
 @Composable
 fun UpdatePrompt(updater: AppUpdater) {
     val state by updater.state.collectAsState()
+
+    // Only the download this dialog started gets a modal; a download begun from
+    // Settings already reports itself there.
+    var launchPromptAccepted by remember { mutableStateOf(false) }
 
     when (val current = state) {
         is UpdateState.Available -> {
@@ -38,7 +45,10 @@ fun UpdatePrompt(updater: AppUpdater) {
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = { updater.download(current.release) }) { Text("Download") }
+                    TextButton(onClick = {
+                        launchPromptAccepted = true
+                        updater.download(current.release)
+                    }) { Text("Download") }
                 },
                 dismissButton = {
                     TextButton(onClick = { updater.dismissLaunchPrompt() }) { Text("Later") }
@@ -46,20 +56,23 @@ fun UpdatePrompt(updater: AppUpdater) {
             )
         }
 
-        is UpdateState.Downloading -> AlertDialog(
-            onDismissRequest = {},
-            title = { Text("Downloading ${current.release.versionName}") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${(current.progress * 100).toInt()}%")
-                    LinearProgressIndicator(
-                        progress = { current.progress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {},
-        )
+        is UpdateState.Downloading -> {
+            if (!launchPromptAccepted) return
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Downloading ${current.release.versionName}") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("${(current.progress * 100).toInt()}%")
+                        LinearProgressIndicator(
+                            progress = { current.progress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {},
+            )
+        }
 
         else -> Unit
     }
