@@ -15,7 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.model.FeedKind
 import dev.rocry.hneo.model.Story
-import dev.rocry.hneo.ui.components.EinkPaginatedList
+import dev.rocry.hneo.ui.components.EinkRefreshAction
+import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.eink.EinkPagedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,11 +54,7 @@ fun StoryListScreen(
             TopAppBar(
                 title = { Text("hneo") },
                 actions = {
-                    if (einkMode) {
-                        IconButton(onClick = { viewModel.refresh() }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
-                        }
-                    }
+                    EinkRefreshAction(onRefresh = { viewModel.refresh() })
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -98,18 +96,9 @@ fun StoryListScreen(
                     }
                 }
             } else if (state.isLoading && state.stories.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (einkMode) Text("Loading...") else CircularProgressIndicator()
-                }
+                LoadingIndicator()
             } else if (einkMode) {
-                // E-ink: paginated lazy list
-                EinkPaginatedList(
-                    modifier = Modifier.fillMaxSize(),
-                    totalItemCount = state.stories.size,
-                ) {
+                EinkPagedList(modifier = Modifier.fillMaxSize()) {
                     itemsIndexed(
                         items = state.stories,
                         key = { _, story -> story.id },
@@ -169,19 +158,7 @@ fun StoryListScreen(
                         }
 
                         if (state.isLoadingMore) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                }
-                            }
+                            item { LoadingIndicator(caption = "Loading more...", compact = true) }
                         }
                     }
                 }

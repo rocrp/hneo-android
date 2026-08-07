@@ -18,11 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.rocry.hneo.di.LocalAppContainer
-import dev.rocry.hneo.ui.components.EinkPaginatedList
+import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.eink.EinkPagedText
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
 
@@ -121,10 +121,8 @@ fun LlmDocumentScreen(
                     onRetry = { viewModel.refresh() },
                 )
 
-                !state.hasContent && state.isStreaming -> DocumentLoading(
-                    caption = state.kind.loadingCaption,
-                    showSpinner = !einkMode,
-                )
+                !state.hasContent && state.isStreaming ->
+                    LoadingIndicator(caption = state.kind.loadingCaption)
 
                 else -> DocumentBody(
                     text = state.text,
@@ -151,33 +149,15 @@ private fun DocumentError(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun DocumentLoading(caption: String, showSpinner: Boolean) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (showSpinner) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-            Text(
-                text = caption,
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
 private fun BoxScope.DocumentBody(text: String, isStreaming: Boolean, einkMode: Boolean) {
     if (einkMode) {
-        EinkPaginatedList(modifier = Modifier.fillMaxSize()) {
-            item {
-                Markdown(
-                    content = text,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                )
-            }
+        // Continuous text, paged by pixels. Handing this to the list adapter as a
+        // single item computed a page turn of zero: the document could not be read.
+        EinkPagedText(modifier = Modifier.fillMaxSize()) {
+            Markdown(
+                content = text,
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+            )
         }
         return
     }

@@ -25,8 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.di.LocalAppContainer
-import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
-import dev.rocry.hneo.ui.components.LocalVolumePageEvents
+import dev.rocry.hneo.ui.eink.PageArithmetic
+import dev.rocry.hneo.ui.eink.VolumeKeyPaging
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -50,23 +50,12 @@ fun WebViewScreen(
     var currentTitle by remember { mutableStateOf("") }
     var readerMode by remember { mutableStateOf(false) }
 
-    // Volume key page scrolling
-    val setVolumeIntercept = LocalSetVolumeKeyIntercept.current
-    val volumeEvents = LocalVolumePageEvents.current
-    DisposableEffect(Unit) {
-        setVolumeIntercept(true)
-        onDispose { setVolumeIntercept(false) }
-    }
-    LaunchedEffect(webView) {
-        val wv = webView ?: return@LaunchedEffect
-        volumeEvents.collect { direction ->
-            val scrollJs = if (direction < 0) {
-                "window.scrollBy(0, -window.innerHeight * 0.9)"
-            } else {
-                "window.scrollBy(0, window.innerHeight * 0.9)"
-            }
-            wv.evaluateJavascript(scrollJs, null)
-        }
+    // The page is scrolled by the same arithmetic every other reading surface
+    // uses; only the units differ (CSS pixels, applied through the WebView).
+    VolumeKeyPaging { direction ->
+        val wv = webView ?: return@VolumeKeyPaging
+        val delta = PageArithmetic.scrollDelta(wv.height, direction) / wv.resources.displayMetrics.density
+        wv.evaluateJavascript("window.scrollBy(0, $delta)", null)
     }
 
     Scaffold(

@@ -9,28 +9,19 @@ import androidx.compose.runtime.*
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.data.ThemeMode
 import dev.rocry.hneo.di.LocalAppContainer
-import dev.rocry.hneo.ui.components.LocalSetVolumeKeyIntercept
-import dev.rocry.hneo.ui.components.LocalVolumePageEvents
+import dev.rocry.hneo.ui.eink.LocalVolumeKeyTransport
+import dev.rocry.hneo.ui.eink.VolumeKeyTransport
 import dev.rocry.hneo.ui.navigation.HneoNavGraph
 import dev.rocry.hneo.ui.theme.FontManager
 import dev.rocry.hneo.ui.theme.HneoTheme
 import dev.rocry.hneo.ui.theme.LocalTypeface
-import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
-    private val volumePageEvents = MutableSharedFlow<Int>(extraBufferCapacity = 1)
-    private var isEinkMode = false
-    private var shouldInterceptVolumeKeys = false
+    /** Owned by the Activity because only it sees key events; claimed by whatever can page. */
+    private val volumeKeys = VolumeKeyTransport()
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isEinkMode || shouldInterceptVolumeKeys) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_VOLUME_UP -> { volumePageEvents.tryEmit(-1); return true }
-                KeyEvent.KEYCODE_VOLUME_DOWN -> { volumePageEvents.tryEmit(1); return true }
-            }
-        }
-        return super.onKeyDown(keyCode, event)
-    }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean =
+        volumeKeys.onKeyDown(keyCode) || super.onKeyDown(keyCode, event)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +31,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settings by container.settings.settings.collectAsState(initial = AppSettings())
             val einkMode = settings.themeMode == ThemeMode.EINK
-            isEinkMode = einkMode
             val fontFamily = remember(settings.fontChoice) {
                 FontManager.loadFontFamily(settings.fontChoice, this)
             }
@@ -50,8 +40,7 @@ class MainActivity : ComponentActivity() {
 
             CompositionLocalProvider(
                 LocalAppContainer provides container,
-                LocalVolumePageEvents provides volumePageEvents,
-                LocalSetVolumeKeyIntercept provides { shouldInterceptVolumeKeys = it },
+                LocalVolumeKeyTransport provides volumeKeys,
                 LocalTypeface provides typeface,
             ) {
                 HneoTheme(

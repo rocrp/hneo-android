@@ -15,7 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.rocry.hneo.ui.components.EinkPaginatedList
+import dev.rocry.hneo.ui.components.EinkRefreshAction
+import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.eink.EinkPagedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +44,7 @@ fun CommentListScreen(
                     }
                 },
                 actions = {
+                    EinkRefreshAction(onRefresh = { viewModel.refresh() })
                     IconButton(onClick = onSummaryClick) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = "AI Summary")
                     }
@@ -68,12 +71,7 @@ fun CommentListScreen(
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             if (state.isLoading && state.comments.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (einkMode) Text("Loading...") else CircularProgressIndicator()
-                }
+                LoadingIndicator(caption = "Loading comments...")
             } else if (state.error != null && state.comments.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -86,10 +84,7 @@ fun CommentListScreen(
                 }
             } else if (einkMode) {
                 // E-ink: paginated lazy list — handles variable-height comments
-                EinkPaginatedList(
-                    modifier = Modifier.fillMaxSize(),
-                    totalItemCount = state.comments.size + 1, // +1 for header
-                ) {
+                EinkPagedList(modifier = Modifier.fillMaxSize()) {
                     if (story != null) {
                         item(key = "header") {
                             StoryHeader(
