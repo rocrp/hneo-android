@@ -1,7 +1,10 @@
 name: Release
 
 on:
+  # Branches only — the release job pushes a build-* tag, and an unfiltered
+  # `push` would have that tag trigger this workflow all over again.
   push:
+    branches: ['**']
   pull_request:
 
 permissions:
