@@ -49,6 +49,7 @@ class AppUpdater(
     private val updatesDir: File,
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
+    private val allowAutomaticChecks: Boolean = true,
 ) {
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = _state.asStateFlow()
@@ -60,6 +61,7 @@ class AppUpdater(
      * reports failures into [state] instead of discarding them.
      */
     suspend fun checkOnLaunch() {
+        if (!allowAutomaticChecks) return
         val current = settings.settings.first()
         if (!current.autoUpdateEnabled) return
         if (now() - current.lastUpdateCheck < current.updateCheckIntervalHours * MILLIS_PER_HOUR) return

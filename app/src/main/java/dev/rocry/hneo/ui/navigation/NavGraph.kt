@@ -2,6 +2,10 @@ package dev.rocry.hneo.ui.navigation
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -24,6 +28,7 @@ import dev.rocry.hneo.ui.stories.StoryListScreen
 import dev.rocry.hneo.ui.stories.StoryListViewModel
 import dev.rocry.hneo.ui.update.UpdatePrompt
 import dev.rocry.hneo.ui.webview.WebViewScreen
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @Composable
 fun HneoNavGraph() {
@@ -32,6 +37,7 @@ fun HneoNavGraph() {
     val storyListViewModel: StoryListViewModel = viewModel(factory = container.viewModelFactory)
     val context = LocalContext.current
     val settings by container.settings.settings.collectAsState(initial = AppSettings())
+    val einkMode = LocalEinkMode.current
 
     LaunchedEffect(Unit) { container.appUpdater.checkOnLaunch() }
 
@@ -45,7 +51,12 @@ fun HneoNavGraph() {
         }
     }
 
-    NavHost(navController = navController, startDestination = Routes.STORIES) {
+    NavHost(
+        navController = navController,
+        startDestination = Routes.STORIES,
+        enterTransition = { if (einkMode) EnterTransition.None else fadeIn() },
+        exitTransition = { if (einkMode) ExitTransition.None else fadeOut() },
+    ) {
         composable(Routes.STORIES) {
             StoryListScreen(
                 viewModel = storyListViewModel,

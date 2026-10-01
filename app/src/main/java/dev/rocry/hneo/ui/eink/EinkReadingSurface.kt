@@ -1,6 +1,9 @@
 package dev.rocry.hneo.ui.eink
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -15,12 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import dev.rocry.hneo.ui.components.einkClickable
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
-private const val SWIPE_THRESHOLD_PX = 80f
+private val SWIPE_THRESHOLD = 48.dp
 
 /**
  * The E-Ink Reading Surface: content rendered as discrete pages, because e-ink
@@ -29,6 +33,7 @@ private const val SWIPE_THRESHOLD_PX = 80f
  * Two adapters over the same paging behaviour — [EinkPagedList] for list content,
  * [EinkPagedText] for continuous text. Both turn pages by button, volume key and
  * swipe, and both share the page chrome below.
+ * List turns use pixels too: one comment can be taller than the viewport.
  */
 @Composable
 fun EinkPagedList(
@@ -37,6 +42,7 @@ fun EinkPagedList(
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    var viewportHeight by remember { mutableIntStateOf(0) }
 
     val firstVisible by remember { derivedStateOf { listState.firstVisibleItemIndex } }
     val visibleCount by remember {
@@ -47,10 +53,9 @@ fun EinkPagedList(
     }
 
     fun turn(direction: PageDirection) {
+        if (viewportHeight <= 0) return
         scope.launch {
-            listState.scrollToItem(
-                PageArithmetic.listTarget(firstVisible, visibleCount, totalItems, direction),
-            )
+            listState.scrollBy(PageArithmetic.scrollDelta(viewportHeight, direction).toFloat())
         }
     }
 
@@ -58,11 +63,11 @@ fun EinkPagedList(
         modifier = modifier,
         onTurn = ::turn,
         chrome = {
-            if (totalItems > visibleCount) {
+            if (listState.canScrollBackward || listState.canScrollForward) {
                 PageChrome(
                     label = PageArithmetic.listPageLabel(firstVisible, visibleCount, totalItems),
-                    canGoPrevious = firstVisible > 0,
-                    canGoNext = firstVisible + visibleCount < totalItems,
+                    canGoPrevious = listState.canScrollBackward,
+                    canGoNext = listState.canScrollForward,
                     onTurn = ::turn,
                 )
             }
@@ -71,7 +76,7 @@ fun EinkPagedList(
         LazyColumn(
             state = listState,
             userScrollEnabled = false,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().onSizeChanged { viewportHeight = it.height },
             content = content,
         )
     }
@@ -139,6 +144,8 @@ private fun PagedSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     VolumeKeyPaging(onPage = onTurn)
+    val currentOnTurn by rememberUpdatedState(onTurn)
+    val swipeThresholdPx = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
 
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
 
@@ -146,19 +153,20 @@ private fun PagedSurface(
         Box(
             modifier = Modifier
                 .weight(1f)
-                .pointerInput(Unit) {
+                .pointerInput(swipeThresholdPx) {
                     detectVerticalDragGestures(
                         onDragStart = { dragAccumulator = 0f },
                         onVerticalDrag = { _, amount -> dragAccumulator += amount },
                         onDragEnd = {
-                            if (abs(dragAccumulator) > SWIPE_THRESHOLD_PX) {
+                            if (abs(dragAccumulator) > swipeThresholdPx) {
                                 // Swiping up reveals what is below: the next page.
-                                onTurn(
+                                currentOnTurn(
                                     if (dragAccumulator < 0) PageDirection.NEXT else PageDirection.PREVIOUS,
                                 )
                             }
                             dragAccumulator = 0f
                         },
+                        onDragCancel = { dragAccumulator = 0f },
                     )
                 },
             content = content,
@@ -190,12 +198,23 @@ private fun PageChrome(
 
 @Composable
 private fun PageButton(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.3f),
+    Box(
         modifier = Modifier
-            .then(if (enabled) Modifier.einkClickable(onClick) else Modifier)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-    )
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .sizeIn(minWidth = 64.dp, minHeight = 48.dp)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.3f),
+        )
+    }
 }

@@ -68,11 +68,13 @@ class AppContainer(
 
     val settings: SettingsStore = DataStoreSettings(appContext.settingsDataStore)
 
-    val hnClient = HNClient(jsonHttp)
+    val hnClient = HNClient(jsonHttp, baseUrl = BuildConfig.HN_BASE_URL)
     val llmClient: LlmClient = OpenAiLlmClient(httpEngine, json, settings, dispatchers.io)
     val openGraphService = OpenGraphService(jsonHttp)
     val pasteService = PasteService(jsonHttp)
-    private val updateService = UpdateService(jsonHttp, httpEngine, json, dispatchers.io)
+    private val updateService = UpdateService(
+        jsonHttp, httpEngine, json, dispatchers.io, releasesUrl = BuildConfig.RELEASES_URL,
+    )
 
     private val storyCache = StoryCache(File(appContext.cacheDir, "stories"), json, dispatchers.io)
     private val commentCache = CommentCache()
@@ -91,6 +93,7 @@ class AppContainer(
         currentVersionCode = BuildConfig.VERSION_CODE,
         updatesDir = File(appContext.cacheDir, "updates"),
         scope = applicationScope,
+        allowAutomaticChecks = !BuildConfig.DEBUG,
     )
 
     val viewModelFactory: ViewModelProvider.Factory = viewModelFactory {

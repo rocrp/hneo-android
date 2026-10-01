@@ -18,11 +18,19 @@ import kotlinx.coroutines.flow.map
 val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
 enum class ThemeMode(val label: String) {
+    AUTO("Automatic"),
     NORMAL("Normal"),
     EINK("E-Ink");
 
+    fun usesEink(manufacturer: String): Boolean = when (this) {
+        EINK -> true
+        NORMAL -> false
+        AUTO -> manufacturer.equals("ONYX", ignoreCase = true) ||
+            manufacturer.equals("BOOX", ignoreCase = true)
+    }
+
     companion object {
-        fun fromString(s: String): ThemeMode = entries.find { it.name == s } ?: NORMAL
+        fun fromString(s: String): ThemeMode = entries.find { it.name == s } ?: AUTO
     }
 }
 
@@ -40,7 +48,7 @@ data class AppSettings(
     val llmExplainPrompt: String = DEFAULT_EXPLAIN_PROMPT,
     val llmWebpageSummaryPrompt: String = DEFAULT_WEBPAGE_SUMMARY_PROMPT,
     val fontChoice: String = BuiltInFont.SYSTEM.displayName,
-    val themeMode: ThemeMode = ThemeMode.NORMAL,
+    val themeMode: ThemeMode = ThemeMode.AUTO,
     val openLinksInBrowser: Boolean = false,
     val autoUpdateEnabled: Boolean = true,
     val updateCheckIntervalHours: Int = 24,

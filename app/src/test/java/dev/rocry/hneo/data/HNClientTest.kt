@@ -19,6 +19,20 @@ class HNClientTest {
     )
 
     @Test
+    fun `custom API base is used for feeds and details`() = runTest {
+        val custom = HNClient(
+            JsonHttp(engine, Json { ignoreUnknownKeys = true }, UnconfinedTestDispatcher()),
+            baseUrl = "https://hn.example/api/",
+        )
+        engine.respond(body = "[]")
+        custom.fetchStories(FeedKind.TOP, page = 3)
+        assertEquals("https://hn.example/api/news?page=3", engine.lastRequest.url)
+        engine.respond(body = """{"id":42,"title":"Test","comments":[]}""")
+        custom.fetchStoryDetail(42)
+        assertEquals("https://hn.example/api/item/42", engine.lastRequest.url)
+    }
+
+    @Test
     fun `fetchStories decodes the feed`() = runTest {
         engine.respond(
             body = """

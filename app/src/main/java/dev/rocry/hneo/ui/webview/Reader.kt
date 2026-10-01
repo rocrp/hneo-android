@@ -57,7 +57,7 @@ object Reader {
             ".ad, .ads, .sidebar, .comments, .social, .share, .related, .newsletter, .popup, " +
             ".modal, .cookie, [role=\"banner\"], [role=\"navigation\"], [role=\"complementary\"]"
 
-    fun css(font: ReaderFont): String =
+    fun css(font: ReaderFont, einkMode: Boolean = false): String =
         font.cssFontFace +
             "body{max-width:680px;margin:0 auto;padding:20px 16px;" +
             "font-family:${font.cssFontFamily};" +
@@ -68,10 +68,19 @@ object Reader {
             "pre,code{font-size:14px;background:#f5f5f5;padding:2px 6px;border-radius:3px;overflow-x:auto}" +
             "pre{padding:12px;margin:12px 0}" +
             "blockquote{border-left:3px solid #ddd;margin:12px 0;padding-left:16px;color:#555}" +
-            "p{margin:0 0 16px}"
+            "p{margin:0 0 16px}" +
+            if (einkMode) {
+                "html,body{color:#000;background:#fff}" +
+                    "a{color:#000;text-decoration:underline}" +
+                    "pre,code{color:#000;background:#fff;border:1px solid #000}" +
+                    "blockquote{color:#000;border-left-color:#000}" +
+                    "*{animation:none!important;transition:none!important;scroll-behavior:auto!important}"
+            } else {
+                ""
+            }
 
-    fun script(font: ReaderFont): String {
-        val stylesheet = css(font).escapeForJsSingleQuotes()
+    fun script(font: ReaderFont, einkMode: Boolean = false): String {
+        val stylesheet = css(font, einkMode = einkMode).escapeForJsSingleQuotes()
         val selectors = CONTENT_SELECTORS.joinToString(",") { "'${it.escapeForJsSingleQuotes()}'" }
         return """
             (function() {

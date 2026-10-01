@@ -8,7 +8,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 
 val LocalEinkMode = staticCompositionLocalOf { false }
 
@@ -92,7 +94,7 @@ fun HneoTheme(
         else -> LightColorScheme
     }
 
-    val typography = if (fontFamily != FontFamily.Default) {
+    val fontTypography = if (fontFamily != FontFamily.Default) {
         val default = Typography()
         Typography(
             displayLarge = default.displayLarge.copy(fontFamily = fontFamily),
@@ -113,6 +115,19 @@ fun HneoTheme(
         )
     } else {
         Typography()
+    }
+
+    // Use the current window in dp, including split screen and rotation.
+    val typography = if (LocalConfiguration.current.screenWidthDp >= 600) {
+        fontTypography.copy(
+            titleSmall = fontTypography.titleSmall.copy(fontSize = 18.sp, lineHeight = 26.sp),
+            bodyLarge = fontTypography.bodyLarge.copy(fontSize = 20.sp, lineHeight = 30.sp),
+            bodyMedium = fontTypography.bodyMedium.copy(fontSize = 18.sp, lineHeight = 28.sp),
+            bodySmall = fontTypography.bodySmall.copy(fontSize = 14.sp, lineHeight = 20.sp),
+            labelMedium = fontTypography.labelMedium.copy(fontSize = 14.sp, lineHeight = 20.sp),
+        )
+    } else {
+        fontTypography
     }
 
     CompositionLocalProvider(

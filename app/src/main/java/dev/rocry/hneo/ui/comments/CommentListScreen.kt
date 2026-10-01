@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.rocry.hneo.ui.components.EinkRefreshAction
 import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.components.ReadingColumn
 import dev.rocry.hneo.ui.eink.EinkPagedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
@@ -69,7 +70,7 @@ fun CommentListScreen(
             )
         },
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
+        ReadingColumn(modifier = Modifier.padding(padding)) {
             if (state.isLoading && state.comments.isEmpty()) {
                 LoadingIndicator(caption = "Loading comments...")
             } else if (state.error != null && state.comments.isEmpty()) {

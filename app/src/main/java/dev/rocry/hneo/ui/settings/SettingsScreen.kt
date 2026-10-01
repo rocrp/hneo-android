@@ -28,6 +28,7 @@ import dev.rocry.hneo.data.ThemeMode
 import dev.rocry.hneo.data.update.UpdateState
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.components.ReadingColumn
 import dev.rocry.hneo.ui.components.einkClickable
 import dev.rocry.hneo.ui.theme.BuiltInFont
 import dev.rocry.hneo.ui.theme.FontInfo
@@ -94,171 +95,172 @@ fun SettingsScreen(onBack: () -> Unit) {
             return@Scaffold
         }
 
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            SettingsSection("Theme")
+        ReadingColumn(modifier = Modifier.padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                SettingsSection("Theme")
 
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                ThemeMode.entries.forEachIndexed { index, mode ->
-                    SegmentedButton(
-                        shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
-                        selected = current.themeMode == mode,
-                        onClick = { update { it.copy(themeMode = mode) } },
-                    ) {
-                        Text(mode.label)
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            SettingsSection("Font") {
-                FilledTonalButton(
-                    onClick = { fontPickerLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Import")
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                availableFonts.forEach { font ->
-                    FontRow(
-                        font = font,
-                        selected = current.fontChoice == font.name,
-                        onSelect = { update { it.copy(fontChoice = font.name) } },
-                        onDelete = {
-                            FontManager.deleteFont(context, font)
-                            availableFonts = FontManager.listAvailableFonts(context)
-                            if (current.fontChoice == font.name) {
-                                update { it.copy(fontChoice = BuiltInFont.SYSTEM.displayName) }
-                            }
-                        },
-                    )
-                }
-            }
-
-            Text(
-                text = "Import .ttf/.otf font files to use custom fonts",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SettingsSection("Browser")
-
-            SettingsSwitchRow(
-                title = "Open links in external browser",
-                subtitle = "Use default browser instead of in-app webview",
-                checked = current.openLinksInBrowser,
-                onCheckedChange = { enabled -> update { it.copy(openLinksInBrowser = enabled) } },
-            )
-
-            HorizontalDivider()
-
-            SettingsSection("AI Summary")
-
-            SettingsTextField(
-                value = current.llmApiUrl,
-                label = "API URL",
-                onCommit = { value -> update { it.copy(llmApiUrl = value) } },
-            )
-
-            SettingsTextField(
-                value = current.llmModel,
-                label = "Model",
-                onCommit = { value -> update { it.copy(llmModel = value) } },
-            )
-
-            SettingsTextField(
-                value = current.llmApiKey,
-                label = "API Key",
-                onCommit = { value -> update { it.copy(llmApiKey = value) } },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            )
-
-            SettingsTextField(
-                value = current.llmMaxComments.toString(),
-                label = "Max Comments ($MIN_COMMENTS-$MAX_COMMENTS)",
-                onCommit = { value ->
-                    value.toIntOrNull()?.coerceIn(MIN_COMMENTS, MAX_COMMENTS)?.let { clamped ->
-                        update { it.copy(llmMaxComments = clamped) }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-
-            HorizontalDivider()
-
-            SettingsSection("Prompts")
-
-            SettingsTextField(
-                value = current.llmSystemPrompt,
-                label = "System Prompt",
-                onCommit = { value -> update { it.copy(llmSystemPrompt = value) } },
-                singleLine = false,
-                minLines = 3,
-            )
-
-            SettingsTextField(
-                value = current.llmExplainPrompt,
-                label = "Explain Prompt",
-                onCommit = { value -> update { it.copy(llmExplainPrompt = value) } },
-                singleLine = false,
-                minLines = 3,
-            )
-
-            SettingsTextField(
-                value = current.llmWebpageSummaryPrompt,
-                label = "Webpage Summary Prompt",
-                onCommit = { value -> update { it.copy(llmWebpageSummaryPrompt = value) } },
-                singleLine = false,
-                minLines = 3,
-            )
-
-            HorizontalDivider()
-
-            SettingsSection("About")
-
-            SettingsSwitchRow(
-                title = "Auto check for updates",
-                subtitle = "Check on app launch at the chosen interval",
-                checked = current.autoUpdateEnabled,
-                onCheckedChange = { enabled -> update { it.copy(autoUpdateEnabled = enabled) } },
-            )
-
-            if (current.autoUpdateEnabled) {
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    UPDATE_INTERVALS.forEachIndexed { index, (hours, label) ->
+                    ThemeMode.entries.forEachIndexed { index, mode ->
                         SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(index, UPDATE_INTERVALS.size),
-                            selected = current.updateCheckIntervalHours == hours,
-                            onClick = { update { it.copy(updateCheckIntervalHours = hours) } },
+                            shape = SegmentedButtonDefaults.itemShape(index, ThemeMode.entries.size),
+                            selected = current.themeMode == mode,
+                            onClick = { update { it.copy(themeMode = mode) } },
                         ) {
-                            Text(label, style = MaterialTheme.typography.labelSmall)
+                            Text(mode.label)
                         }
                     }
                 }
+
+                HorizontalDivider()
+
+                SettingsSection("Font") {
+                    FilledTonalButton(
+                        onClick = { fontPickerLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Import")
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    availableFonts.forEach { font ->
+                        FontRow(
+                            font = font,
+                            selected = current.fontChoice == font.name,
+                            onSelect = { update { it.copy(fontChoice = font.name) } },
+                            onDelete = {
+                                FontManager.deleteFont(context, font)
+                                availableFonts = FontManager.listAvailableFonts(context)
+                                if (current.fontChoice == font.name) {
+                                    update { it.copy(fontChoice = BuiltInFont.SYSTEM.displayName) }
+                                }
+                            },
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Import .ttf/.otf font files to use custom fonts",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                HorizontalDivider()
+
+                SettingsSection("Browser")
+
+                SettingsSwitchRow(
+                    title = "Open links in external browser",
+                    subtitle = "Use default browser instead of in-app webview",
+                    checked = current.openLinksInBrowser,
+                    onCheckedChange = { enabled -> update { it.copy(openLinksInBrowser = enabled) } },
+                )
+
+                HorizontalDivider()
+
+                SettingsSection("AI Summary")
+
+                SettingsTextField(
+                    value = current.llmApiUrl,
+                    label = "API URL",
+                    onCommit = { value -> update { it.copy(llmApiUrl = value) } },
+                )
+
+                SettingsTextField(
+                    value = current.llmModel,
+                    label = "Model",
+                    onCommit = { value -> update { it.copy(llmModel = value) } },
+                )
+
+                SettingsTextField(
+                    value = current.llmApiKey,
+                    label = "API Key",
+                    onCommit = { value -> update { it.copy(llmApiKey = value) } },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                )
+
+                SettingsTextField(
+                    value = current.llmMaxComments.toString(),
+                    label = "Max Comments ($MIN_COMMENTS-$MAX_COMMENTS)",
+                    onCommit = { value ->
+                        value.toIntOrNull()?.coerceIn(MIN_COMMENTS, MAX_COMMENTS)?.let { clamped ->
+                            update { it.copy(llmMaxComments = clamped) }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+
+                HorizontalDivider()
+
+                SettingsSection("Prompts")
+
+                SettingsTextField(
+                    value = current.llmSystemPrompt,
+                    label = "System Prompt",
+                    onCommit = { value -> update { it.copy(llmSystemPrompt = value) } },
+                    singleLine = false,
+                    minLines = 3,
+                )
+
+                SettingsTextField(
+                    value = current.llmExplainPrompt,
+                    label = "Explain Prompt",
+                    onCommit = { value -> update { it.copy(llmExplainPrompt = value) } },
+                    singleLine = false,
+                    minLines = 3,
+                )
+
+                SettingsTextField(
+                    value = current.llmWebpageSummaryPrompt,
+                    label = "Webpage Summary Prompt",
+                    onCommit = { value -> update { it.copy(llmWebpageSummaryPrompt = value) } },
+                    singleLine = false,
+                    minLines = 3,
+                )
+
+                HorizontalDivider()
+
+                SettingsSection("About")
+
+                SettingsSwitchRow(
+                    title = "Auto check for updates",
+                    subtitle = "Check on app launch at the chosen interval",
+                    checked = current.autoUpdateEnabled,
+                    onCheckedChange = { enabled -> update { it.copy(autoUpdateEnabled = enabled) } },
+                )
+
+                if (current.autoUpdateEnabled) {
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        UPDATE_INTERVALS.forEachIndexed { index, (hours, label) ->
+                            SegmentedButton(
+                                shape = SegmentedButtonDefaults.itemShape(index, UPDATE_INTERVALS.size),
+                                selected = current.updateCheckIntervalHours == hours,
+                                onClick = { update { it.copy(updateCheckIntervalHours = hours) } },
+                            ) {
+                                Text(label, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                UpdateSection()
+
+                Spacer(modifier = Modifier.height(32.dp))
             }
-
-            Text(
-                text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            UpdateSection()
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }

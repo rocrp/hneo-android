@@ -17,6 +17,7 @@ import dev.rocry.hneo.model.FeedKind
 import dev.rocry.hneo.model.Story
 import dev.rocry.hneo.ui.components.EinkRefreshAction
 import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.components.ReadingColumn
 import dev.rocry.hneo.ui.eink.EinkPagedList
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 
@@ -62,76 +63,44 @@ fun StoryListScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            // Feed selector tabs
-            ScrollableTabRow(
-                selectedTabIndex = FeedKind.entries.indexOf(state.currentFeed),
-                edgePadding = 16.dp,
-                divider = {},
-            ) {
-                FeedKind.entries.forEach { feed ->
-                    Tab(
-                        selected = feed == state.currentFeed,
-                        onClick = { viewModel.switchFeed(feed) },
-                        text = { Text(feed.label) },
-                    )
-                }
-            }
-
-            if (state.error != null && state.stories.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+        ReadingColumn(modifier = Modifier.padding(padding)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Feed selector tabs
+                ScrollableTabRow(
+                    selectedTabIndex = FeedKind.entries.indexOf(state.currentFeed),
+                    edgePadding = 16.dp,
+                    divider = {},
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = state.error ?: "Unknown error",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
+                    FeedKind.entries.forEach { feed ->
+                        Tab(
+                            selected = feed == state.currentFeed,
+                            onClick = { viewModel.switchFeed(feed) },
+                            text = { Text(feed.label) },
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { viewModel.refresh() }) {
-                            Text("Retry")
-                        }
                     }
                 }
-            } else if (state.isLoading && state.stories.isEmpty()) {
-                LoadingIndicator()
-            } else if (einkMode) {
-                EinkPagedList(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(
-                        items = state.stories,
-                        key = { _, story -> story.id },
-                    ) { index, story ->
-                        StoryCard(
-                            story = story,
-                            onClick = { onStoryClick(story) },
-                        )
-                        if (index < state.stories.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                thickness = 0.5.dp,
+
+                if (state.error != null && state.stories.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = state.error ?: "Unknown error",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
                             )
-                        }
-                        // Load more when near end
-                        if (index >= state.stories.size - 5) {
-                            LaunchedEffect(state.currentPage) {
-                                viewModel.loadMore()
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = { viewModel.refresh() }) {
+                                Text("Retry")
                             }
                         }
                     }
-                }
-            } else {
-                // Normal: scrollable list with pull-to-refresh
-                PullToRefreshBox(
-                    isRefreshing = state.isLoading,
-                    onRefresh = { viewModel.refresh() },
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
+                } else if (state.isLoading && state.stories.isEmpty()) {
+                    LoadingIndicator()
+                } else if (einkMode) {
+                    EinkPagedList(modifier = Modifier.fillMaxSize()) {
                         itemsIndexed(
                             items = state.stories,
                             key = { _, story -> story.id },
@@ -140,15 +109,12 @@ fun StoryListScreen(
                                 story = story,
                                 onClick = { onStoryClick(story) },
                             )
-
                             if (index < state.stories.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                                 )
                             }
-
                             // Load more when near end
                             if (index >= state.stories.size - 5) {
                                 LaunchedEffect(state.currentPage) {
@@ -156,9 +122,46 @@ fun StoryListScreen(
                                 }
                             }
                         }
+                    }
+                } else {
+                    // Normal: scrollable list with pull-to-refresh
+                    PullToRefreshBox(
+                        isRefreshing = state.isLoading,
+                        onRefresh = { viewModel.refresh() },
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            itemsIndexed(
+                                items = state.stories,
+                                key = { _, story -> story.id },
+                            ) { index, story ->
+                                StoryCard(
+                                    story = story,
+                                    onClick = { onStoryClick(story) },
+                                )
 
-                        if (state.isLoadingMore) {
-                            item { LoadingIndicator(caption = "Loading more...", compact = true) }
+                                if (index < state.stories.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                    )
+                                }
+
+                                // Load more when near end
+                                if (index >= state.stories.size - 5) {
+                                    LaunchedEffect(state.currentPage) {
+                                        viewModel.loadMore()
+                                    }
+                                }
+                            }
+
+                            if (state.isLoadingMore) {
+                                item { LoadingIndicator(caption = "Loading more...", compact = true) }
+                            }
                         }
                     }
                 }

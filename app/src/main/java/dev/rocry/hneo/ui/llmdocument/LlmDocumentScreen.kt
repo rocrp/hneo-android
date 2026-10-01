@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.m3.Markdown
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.components.LoadingIndicator
+import dev.rocry.hneo.ui.components.ReadingColumn
 import dev.rocry.hneo.ui.eink.EinkPagedText
 import dev.rocry.hneo.ui.theme.LocalEinkMode
 import kotlinx.coroutines.launch
@@ -113,7 +114,7 @@ fun LlmDocumentScreen(
             )
         },
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        ReadingColumn(modifier = Modifier.padding(padding)) {
             val error = state.error
             when {
                 error != null && !state.hasContent -> DocumentError(

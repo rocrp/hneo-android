@@ -1,13 +1,13 @@
 package dev.rocry.hneo
 
 import android.os.Bundle
+import android.os.Build
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
 import dev.rocry.hneo.data.AppSettings
-import dev.rocry.hneo.data.ThemeMode
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.eink.LocalVolumeKeyTransport
 import dev.rocry.hneo.ui.eink.VolumeKeyTransport
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by container.settings.settings.collectAsState(initial = AppSettings())
-            val einkMode = settings.themeMode == ThemeMode.EINK
+            val einkMode = settings.themeMode.usesEink(Build.MANUFACTURER)
             val fontFamily = remember(settings.fontChoice) {
                 FontManager.loadFontFamily(settings.fontChoice, this)
             }

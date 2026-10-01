@@ -55,6 +55,31 @@ class AppUpdaterTest {
     private val hoursInMillis = 60 * 60 * 1000L
 
     @Test
+    fun `build policy suppresses automatic checks but allows manual checks on configured source`() = runTest {
+        val customService = UpdateService(
+            JsonHttp(engine, json, dispatcher), engine, json, dispatcher,
+            releasesUrl = "https://api.github.com/repos/example/fork/releases/latest",
+        )
+        val manualOnly = AppUpdater(
+            updateService = customService,
+            settings = settings,
+            installer = { installed += it },
+            currentVersionCode = 100,
+            updatesDir = tempFolder.root,
+            scope = TestScope(dispatcher),
+            now = { clock },
+            allowAutomaticChecks = false,
+        )
+        engine.respond(body = releaseBody(200))
+        manualOnly.checkOnLaunch()
+        assertTrue(engine.requests.isEmpty())
+        assertEquals(UpdateState.Idle, manualOnly.state.value)
+        manualOnly.checkNow()
+        assertEquals("https://api.github.com/repos/example/fork/releases/latest", engine.lastRequest.url)
+        assertTrue((manualOnly.state.value as UpdateState.Available).promptOnLaunch.not())
+    }
+
+    @Test
     fun `a newer release becomes available and prompts on launch`() = runTest {
         engine.respond(body = releaseBody(200))
 

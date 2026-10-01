@@ -43,6 +43,7 @@ class UpdateService(
     private val engine: HttpEngine,
     private val json: Json,
     private val ioDispatcher: CoroutineDispatcher,
+    private val releasesUrl: String = "https://api.github.com/repos/rocrp/hneo-android/releases/latest",
 ) {
     /** The one place that knows what a release APK is called. */
     fun apkFileName(versionName: String): String = "hneo-$versionName.apk"
@@ -50,7 +51,7 @@ class UpdateService(
     suspend fun fetchLatestRelease(): ReleaseInfo {
         val release = try {
             http.decodeObject(
-                HttpRequest(RELEASES_URL, headers = mapOf("Accept" to "application/vnd.github+json")),
+                HttpRequest(releasesUrl, headers = mapOf("Accept" to "application/vnd.github+json")),
             )
         } catch (e: HttpFailure) {
             throw e.asUpdateFailure()
@@ -136,7 +137,6 @@ class UpdateService(
     }
 
     private companion object {
-        const val RELEASES_URL = "https://api.github.com/repos/rocrp/hneo-android/releases/latest"
         const val TAG_PREFIX = "build-"
         const val DOWNLOAD_TIMEOUT_SECONDS = 60L
         const val BUFFER_BYTES = 8192

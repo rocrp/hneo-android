@@ -22,12 +22,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.rocry.hneo.data.AppSettings
 import dev.rocry.hneo.di.LocalAppContainer
 import dev.rocry.hneo.ui.eink.PageArithmetic
 import dev.rocry.hneo.ui.eink.VolumeKeyPaging
 import dev.rocry.hneo.ui.theme.FontManager
+import dev.rocry.hneo.ui.theme.LocalEinkMode
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -37,6 +39,7 @@ fun WebViewScreen(
     onSummary: (pageTitle: String, pageContent: String, pageUrl: String) -> Unit,
 ) {
     val context = LocalContext.current
+    val einkMode = LocalEinkMode.current
     val appSettings by LocalAppContainer.current.settings.settings
         .collectAsState(initial = AppSettings())
     val readerFont = remember(appSettings.fontChoice) {
@@ -85,7 +88,7 @@ fun WebViewScreen(
                         onClick = {
                             readerMode = !readerMode
                             if (readerMode) {
-                                webView?.evaluateJavascript(Reader.script(readerFont), null)
+                                webView?.evaluateJavascript(Reader.script(readerFont, einkMode = einkMode), null)
                             } else {
                                 webView?.reload()
                             }
@@ -131,10 +134,14 @@ fun WebViewScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
             if (progress < 1f) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (einkMode) {
+                    Text("Loading page…", modifier = Modifier.padding(8.dp))
+                } else {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
 
             AndroidView(

@@ -1,6 +1,3 @@
-export JAVA_HOME ?= $(shell /usr/libexec/java_home 2>/dev/null)
-export ANDROID_HOME ?= $(HOME)/w/Android/sdk
-
 -include .env
 export TELEGRAM_BOT_TOKEN
 export TELEGRAM_CHAT_ID
@@ -13,22 +10,23 @@ APK_DIR := app/build/outputs/apk/release
 .PHONY: build debug clean install beta test
 
 test:
-	./gradlew testDebugUnitTest
+	just test
 
 build:
-	./gradlew assembleRelease
+	./scripts/android-dev.sh gradle assembleRelease -Phneo.versionCode=$(BUILD_NUMBER)
 	@cp $(APK_DIR)/app-release.apk $(APK_DIR)/$(APK_NAME)
 	@echo "APK: $(APK_DIR)/$(APK_NAME)"
 
 debug:
-	./gradlew assembleDebug
+	just debug
 	@echo "APK: app/build/outputs/apk/debug/app-debug.apk"
 
 install:
-	./gradlew installDebug
+	@test -n "$(SERIAL)" || (echo 'Pass SERIAL from just doctor' >&2; exit 1)
+	just install "$(SERIAL)"
 
 clean:
-	./gradlew clean
+	just clean
 
 beta: build
 	@# Tag this build (skip if tag already exists on HEAD)

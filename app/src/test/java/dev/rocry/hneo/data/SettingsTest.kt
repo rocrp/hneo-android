@@ -4,9 +4,20 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsTest {
+
+    @Test
+    fun `automatic theme uses manufacturer rather than screen resolution`() {
+        assertTrue(ThemeMode.AUTO.usesEink("ONYX"))
+        assertTrue(ThemeMode.AUTO.usesEink("boox"))
+        assertFalse(ThemeMode.AUTO.usesEink("Google"))
+        assertFalse(ThemeMode.NORMAL.usesEink("ONYX"))
+        assertTrue(ThemeMode.EINK.usesEink("Google"))
+    }
 
     @Test
     fun `an unset store yields exactly the declared defaults`() {

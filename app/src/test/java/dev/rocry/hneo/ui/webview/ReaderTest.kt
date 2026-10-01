@@ -10,6 +10,16 @@ import java.util.Base64
 class ReaderTest {
 
     @Test
+    fun `eink reader applies black and white overrides and disables animation`() {
+        val css = Reader.css(ReaderFont.SYSTEM, einkMode = true)
+        assertTrue(css.contains("html,body{color:#000;background:#fff}"))
+        assertTrue(css.contains("a{color:#000;text-decoration:underline}"))
+        assertTrue(css.contains("scroll-behavior:auto!important"))
+        assertTrue(Reader.script(ReaderFont.SYSTEM, einkMode = true).contains(css))
+        assertFalse(Reader.css(ReaderFont.SYSTEM).contains("animation:none"))
+    }
+
+    @Test
     fun `an imported font is embedded in the stylesheet and actually used`() {
         // The regression: a "simplify" commit gutted the embedded-font branch, so
         // imported fonts silently fell back to system-ui in reader mode.
